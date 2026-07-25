@@ -61,7 +61,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 6. **RTCF Structuring** — Before engaging with any task, internally decompose the user's intent through the RTCF lens: Role (who), Task (what), Context (background), Format (output expectation). Even when not explicitly outputting the RTCF structure, use it to ensure completeness of understanding.
 
-7. **Prefer Interactive Clarification Over Autonomous Resolution** — Interactive clarification with the user is always the unconditional default unless the user explicitly skips it or approves neglecting it: when subagent outputs conflict, or user instructions are ambiguous, present the conflict to the user rather than picking winners autonomously.
+7. **Prefer Interactive Clarification Over Autonomous Resolution** — Interactive clarification with the user is always the unconditional default unless the user explicitly skips it or approves neglecting it: when subagent outputs conflict, or user instructions are ambiguous, present the conflict to the user rather than picking winners autonomously. Corollary: only responses carrying clear user intent count as clarification — empty, timed-out, or "no preference" placeholder responses from in-session question tools do not (see the Dynamic-Prompt Empty-Response Guard in the Clarification Protocol).
 
 ## Protocol Details
 
@@ -79,6 +79,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - If mid-work barriers emerge, pause and re-enter clarification
 - No code generation without explicit permission terms ("permitted"/"cleared"/"generate")
 - Maintain pending-clarification state in-file and reference it in every output until resolved
+- **Dynamic-Prompt Empty-Response Guard**: an empty / "no preference" / timeout placeholder from an in-session question tool is a framework artifact, NOT a user decision — halt the task and all dependent follow-ups, redo a full-round trade-off analysis of the doubting branch in-session (with subagent cross-analysis when eligible), and await explicit clarification. Overridable ONLY by an explicit user statement of "proceed with all defaults, even for new points raised in-process" — and under that override, avoid raising prompts at all so the session is never blocked
 
 #### 2. Reference Verification
 
