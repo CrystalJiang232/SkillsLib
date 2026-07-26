@@ -79,7 +79,14 @@ These roles serve as the **default set** for software development tasks. Extend 
 
 ### Composition Guidance
 
-For effective parallel execution, 5–7 concurrent subagents is a practical cutoff. Exceeding this range adds coordination overhead that typically outweighs parallelism gains. This is guidance, not a hard limit — the framework may enforce its own concurrency ceiling. The 5–7 figure is a heuristic ceiling valid only when each subagent carries a full mandate brief and progress is actively tracked; otherwise use fewer.
+Scale concurrency by effort, tiered:
+
+- **Default: 1 agent (inline execution)** — single-agent execution is the default; fan out only when the work is embarrassingly parallel.
+- **Comparison-type tasks: 2–4 subagents** — e.g., evaluating a few alternatives or cross-validating an answer.
+- **Large, genuinely-parallel research tasks: up to 5–7 subagents** — this remains a conditional ceiling, valid only when each subagent carries a full mandate brief and progress is actively tracked.
+- **Extreme research: 10+ subagents** — permitted only behind a human plan-review gate.
+
+This is guidance, not a hard limit — the framework may enforce its own concurrency ceiling. Exceeding the 5–7 tier adds coordination overhead that typically outweighs parallelism gains.
 
 ---
 
@@ -255,7 +262,7 @@ If subagents return conflicting or divergent results:
 1. Present the conflict to the user with full attribution (RAG Pattern)
 2. Include: what each subagent concluded, what evidence/method they used, and the trade-offs
 3. **Prefer interactive clarification** — let the user adjudicate
-4. Only autonomously resolve when: (a) one result is objectively verifiable as correct, AND (b) the other is demonstrably wrong by the same verification standard
+4. Only autonomously resolve when: (a) one result is objectively verifiable as correct, (b) the other is demonstrably wrong by the same verification standard, AND (c) the user has pre-approved autonomous adjudication; otherwise escalate to interactive clarification.
 
 ### Context Bloat Despite Subagents
 
@@ -274,6 +281,7 @@ If the main agent context is still overloaded despite using subagents:
 - **Delegation logging**: handoffs and delegation decisions are logged so a visible state audit trail exists.
 - **Guardrails**: where the harness allows, external non-bypassable checks (file-scope allowlists, CI gates) complement the in-prompt rules in this file.
 - **Termination & escalation**: termination conditions must be explicit before any fan-out; escalation modes (never / on-failure / always) are decided upfront; large fan-outs pass a human plan-review gate first.
+- **Tool-risk tiering**: classify tools by risk before delegation — read-only vs writable, reversibility, and financial impact. Irreversible high-risk actions (e.g., destructive writes, payments, production changes) trigger human takeover before execution. The human plan-review gate for large fan-outs above is a subset of this general clause.
 - **Voting/debate**: for high-stakes single decisions, run the task multiple times and aggregate (voting) or use structured debate rounds.
 - **Citation/attribution verification**: fan-in synthesis of multi-subagent research claims is cross-referenced against reference-verification.md before acceptance.
 - **Failure-taxonomy awareness**: industry trace studies (e.g., MAST, UC Berkeley 2025) show inter-agent misalignment and verification/termination failures dominate multi-agent failures; structural fixes (this section) outperform prompt tweaks.

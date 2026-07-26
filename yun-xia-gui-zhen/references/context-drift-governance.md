@@ -7,6 +7,10 @@
 A structured working loop to ensure reliable in-session memory, constraint compliance, and information generation quality. Based on the principle:
 *A file of several hundred bytes is worth a context window of a trillion tokens.*
 
+### Compaction Anchors
+
+If the host environment performs history compaction, task goals and hard constraints MUST be written to the external state files (constraints.md, todo.md) BEFORE compaction occurs. Anchor summaries may compress narrative detail but never compress goals or hard constraints.
+
 ## The CTAGV Working Loop
 
 Every task must follow this five-phase cycle visibly in-session:
@@ -111,6 +115,8 @@ Designated by user or derived from constraints (stricter wins). Apply **Verifica
 
 ### Phase A — Acquire
 
+Inject only the minimal high-signal token set needed for the current step; just-in-time retrieval is preferred over preloading (context-rot evidence).
+
 Gather context from all relevant sources:
 - **Session contents**: Scan conversation history
 - **On-disk files**: ReadFile on relevant project files
@@ -143,6 +149,13 @@ When subagent orchestration (Mode B) is active, extend the CTAGV state files and
 - **Stall detection**: no progress update from a subagent after N actions/checkpoints → forced replan, re-delegation, or inline takeover.
 - **Bounded verification**: max 2 refine-retry rounds per verification loop; on non-convergence, escalate to the user (interactive clarification) rather than looping or autonomously adjudicating.
 - **Conflict adjudication**: autonomous adjudication only where objectively verifiable criteria exist AND the user has pre-approved it; otherwise escalate to interactive clarification.
+
+## Mode A — Iteration Caps & Termination Conditions
+
+For Mode A (single-agent CTAGV), each task must set an explicit satisfiable termination condition and a maximum iteration/step cap before execution begins:
+
+- **Termination condition**: a concrete, satisfiable criterion defining when the task is done (tied to the task's verification hooks).
+- **Iteration/step cap**: a hard maximum on loop iterations or steps. The cap is an alarm, not a cure — hitting it triggers replan or escalation to interactive clarification, mirroring the Mode B bounded-verification rule, rather than continued looping.
 
 ## Verification Hooks Pattern (Extended)
 

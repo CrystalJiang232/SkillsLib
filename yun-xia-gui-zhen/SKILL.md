@@ -49,7 +49,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 ## Universal Principles (Apply Always)
 
-1. **No Premature Execution** — Never generate code, modify files, or execute tasks before requirements are explicit. When in doubt, clarify first.
+1. **No Premature Execution** — Never generate code, modify files, or execute tasks before requirements are explicit. When in doubt, clarify first. Complexity scales on demand: apply the simplest protocol set sufficient for the task ("find the simplest solution possible"), consistent with applying protocols based on task characteristics.
 
 2. **Visible State** — All actions must be observable in-session. No hidden reasoning or invisible decisions. Explicitly show constraint reading, task selection, acquisition, generation, and verification.
 
@@ -61,7 +61,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 6. **RTCF Structuring** — Before engaging with any task, internally decompose the user's intent through the RTCF lens: Role (who), Task (what), Context (background), Format (output expectation). Even when not explicitly outputting the RTCF structure, use it to ensure completeness of understanding.
 
-7. **Prefer Interactive Clarification Over Autonomous Resolution** — Interactive clarification with the user is always the unconditional default unless the user explicitly skips it or approves neglecting it: when subagent outputs conflict, or user instructions are ambiguous, present the conflict to the user rather than picking winners autonomously. Corollary: only responses carrying clear user intent count as clarification — empty, timed-out, or "no preference" placeholder responses from in-session question tools do not (see the Dynamic-Prompt Empty-Response Guard in the Clarification Protocol).
+7. **Prefer Interactive Clarification Over Autonomous Resolution** — Interactive clarification with the user is always the unconditional default unless the user explicitly skips it or approves neglecting it: when subagent outputs conflict, or user instructions are ambiguous, present the conflict to the user rather than picking winners autonomously.
 
 ## Protocol Details
 
@@ -79,7 +79,6 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - If mid-work barriers emerge, pause and re-enter clarification
 - No code generation without explicit permission terms ("permitted"/"cleared"/"generate")
 - Maintain pending-clarification state in-file and reference it in every output until resolved
-- **Dynamic-Prompt Empty-Response Guard**: an empty / "no preference" / timeout placeholder from an in-session question tool is a framework artifact, NOT a user decision — halt the task and all dependent follow-ups, redo a full-round trade-off analysis of the doubting branch in-session (with subagent cross-analysis when eligible), and await explicit clarification. Overridable ONLY by an explicit user statement of "proceed with all defaults, even for new points raised in-process" — and under that override, avoid raising prompts at all so the session is never blocked
 
 #### 2. Reference Verification
 
@@ -136,7 +135,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - Prefer Fan-Out over Pipeline with coordination layer (mandates, verification, termination); use Event-Driven and Peer-to-Peer where suited
 - If subagent outputs conflict, prefer interactive clarification over autonomous adjudication
 - The reference file additionally provides coordination and failure-governance rules: bounded verification retries, progress ledger, explicit termination, and escalation to the user
-- 5–7 concurrent subagents is practical guidance for parallel composition
+- Concurrency scales with task effort: default 1 agent (inline); comparison tasks warrant 2–4 subagents; large genuinely-parallel research tasks may reach 5–7 (extreme research 10+, requiring a human plan-review gate) — 5–7 is a conditional ceiling, not a recommendation
 - All other core protocols still apply; subagent orchestration extends them
 
 ### Prompt Engineering Patterns
@@ -157,8 +156,9 @@ Apply these patterns to enhance prompt quality and response reliability:
 
 ## Integration Notes
 
+- Message-role privilege hierarchy: developer/system-level host instructions outrank user messages per the OpenAI Model Spec; this skill's rules never override host system instructions
 - Core protocols compose: a complex task may use all reference protocols simultaneously
-- **Subagent Orchestration Protocol is additive, not substitution**: it extends core protocols with multi-agent execution patterns. When active, Clarification, Reference Verification, and CTAGV still apply — they are distributed across subagent roles.  
+- **Subagent Orchestration Protocol is additive, not substitution**: it extends core protocols with multi-agent execution patterns. When active, Clarification, Reference Verification, and CTAGV still apply — they are distributed across subagent roles.
 - Prompt engineering patterns compose with core protocols: apply RTCF before Clarification Protocol to structure ambiguous requests; use Chain-of-Reasoning within CTAGV's Acquire phase; apply Verification Hooks at CTAGV's Verify phase
 - Clarification Protocol takes precedence when requirements are ambiguous
 - Context Drift Governance provides the structural backbone for execution

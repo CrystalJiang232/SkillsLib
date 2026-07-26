@@ -50,7 +50,6 @@ For each ambiguity point, produce a structured entry:
 - Explicitly state: "Work deferred until clarification complete"
 - If user partially responds, REPEAT the loop with remaining points
 - If user says "just proceed" without addressing points, apply defaults but explicitly list which defaults are being used
-- **If the response arrives via a dynamic-prompt tool and is empty / placeholder-shaped ("no preference", timeout text, blank selection), it is NOT a user response at all** — apply the Dynamic-Prompt Empty-Response Guard below instead of treating it as a waiver or default acceptance
 
 ### Phase 4: Permission Gate
 
@@ -59,44 +58,7 @@ Code generation is PROHIBITED until ONE of these conditions is met:
 - User has explicitly decided on every clarification point
 - User has waived clarification with explicit default acknowledgment
 
-**An empty, timed-out, or placeholder response from an in-session dynamic-prompt tool satisfies NONE of these conditions.** It is a framework artifact, not a user utterance. See the Dynamic-Prompt Empty-Response Guard.
-
 **If in doubt about permission: default to analyst mode (no writing).**
-
-## Dynamic-Prompt Empty-Response Guard
-
-### Background
-
-Some agents possess an in-session dynamic-prompting capability (exact name varies — interactive question tool, ask-user tool, etc.) that raises questions to the user without interrupting the session. Some of these tools enforce timeouts. A timeout typically surfaces as an empty user response, often rendered as "no preference" or a similar placeholder.
-
-The danger: the user may genuinely HAVE a preference — they were simply away from the computer. If the framework-side placeholder is silently treated as a real answer, an accidental non-event (or a user mis-click) breaks the key semantics this entire protocol exists to protect.
-
-### Core Rule
-
-An empty / "no preference" / placeholder / timeout response from a dynamic prompt is **NOT a user decision**. It must never be interpreted as:
-- genuine indifference,
-- consent to the recommended default,
-- a waiver of clarification,
-- or any intentional answer whatsoever.
-
-### Mandatory Procedure on Empty Response
-
-When a dynamic prompt returns an empty / "no preference" / default-shaped response lacking clear user intent:
-
-1. **HALT** — Immediately halt the current task AND halt every follow-up task that depends on the unresolved point. The dependent chain stays frozen.
-2. **NO ASSUMPTIONS** — Do NOT proceed with assumptions or defaults on the doubting branch (the branch the prompt was asking about).
-3. **REDO TRADE-OFF ANALYSIS** — Perform a full-round trade-off analysis of the doubting branch from scratch and output it in-session (options, trade-offs, recommended default with justification), then await the user's explicit clarification on it.
-4. **SUBAGENT CROSS-ANALYSIS (if eligible)** — If subagent capability is available (Mode B) and not forbidden, spawn a subagent to perform an independent cross-analysis of the doubting branch; merge its findings into the in-session analysis for robustness before awaiting user input.
-5. **RE-PROMPT / WAIT** — Present the merged analysis together with the open question, and remain halted until a response carrying clear user intent arrives.
-
-### Override Clause
-
-This guard MAY be overridden ONLY when the user has explicitly stated, in substance: **"proceed with all defaults, even for new points raised in-process."**
-
-The two semantics are distinct, binding, and must be kept crystal clear:
-
-- **WITHOUT the override** → an empty / "no preference" response means: halt, re-analyze the doubting branch (with subagent cross-analysis when eligible), output in-session, and re-ask. NEVER treat it as default acceptance.
-- **WITH the override active** → an empty / "no preference" response MAY be assumed to accept the recommended default. However, in this mode the agent SHOULD avoid raising dynamic prompts in the first place — resolve points internally via defaults — precisely to prevent the session from being blocked by prompts the user has pre-declared they will not answer.
 
 ## Mid-Work Barrier Detection
 
