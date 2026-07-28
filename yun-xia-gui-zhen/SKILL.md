@@ -57,6 +57,8 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 4. **Subagent Discipline** — When verification is needed, use explorer subagents pre-clarification and supervisor subagents post-clarification. Never skip verification for P0 constraints.
 
+4a. **Orchestration-Only Main Session (Mode B)** — When Subagent Orchestration is active and the task already satisfies a class-grade trigger (see subagent-orchestration.md §1 — Heavy-Context Task Classes), the main session MUST NOT directly edit code, modify project artifacts, open large documents, or run bulk search/exploration inline. Its permitted direct actions are confined to orchestration: spawning subagents, reading returned reports, and writing its own governance artifacts (constraint files, TODOs, progress ledger, mandates). All exploration, generation, and verification work is delegated. Exceptions are limited to: (a) explicit user approval or request, (b) the narrowly-scoped conflict-inspection exemption in subagent-orchestration.md §7, reachable only after a confidence-gated (≥0.9) tie-breaker subagent has failed to resolve the conflict, and (c) announced emergency takeover per subagent-orchestration.md §7. If the main session catches itself reaching for an edit/read tool on task material while delegation is available, that is the signal to write a mandate instead.
+
 5. **File-Based State** — Session memory is unreliable. A file of several hundred bytes is worth a context window of a trillion tokens. Persist state (constraints, TODOs, verification hooks) to files.
 
 6. **RTCF Structuring** — Before engaging with any task, internally decompose the user's intent through the RTCF lens: Role (who), Task (what), Context (background), Format (output expectation). Even when not explicitly outputting the RTCF structure, use it to ensure completeness of understanding.
@@ -127,8 +129,9 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 **Process**: Read [references/subagent-orchestration.md](references/subagent-orchestration.md)
 
 **Summary**:
-- Main agent acts as supervisor — orchestrates, does not execute
-- Apply the Decision Matrix to determine when spawning is justified
+- Main agent acts as supervisor — orchestrates, does not execute; direct edits/exploration in the main session are prohibited except via the explicit exemptions (Universal Principle 4a)
+- Apply the Decision Matrix to determine when spawning is justified; Heavy-Context Task Classes (large documentation exploration, mass codebase dives, wide web search/aggregation of excessive information) trigger delegation automatically — staying inline on them is a protocol violation, not a judgment call
+- Conflicting subagent findings go to a confidence-gated tie-breaker subagent (conclusion only at confidence ≥ 0.9, grounded in independent exploration; below threshold, report back to the user); the main session must not intervene while the tie-breaker runs
 - Use the Handoff Contract (mandate format) for every subagent delegation
 - Compose subagent roles horizontally (concern-based), never vertically
 - Max depth = 1: subagents must NOT spawn further subagents

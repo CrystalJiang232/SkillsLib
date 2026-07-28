@@ -34,6 +34,17 @@ Spawn a subagent when **ANY** of the following conditions are met:
 | **Context/token-consuming task** | Large input expected that would bloat main agent context | "Analyze this 50-file PR for correctness, concurrency, performance, and safety issues" |
 | **Parallel and time-consuming** | Multiple independent workstreams exist that can execute simultaneously | "Check for TypeScript errors AND run the test suite AND lint the changed files" |
 
+### Heavy-Context Task Classes — Class-Grade Trigger
+
+Independent of the per-row matrix judgment above, the following task **classes** are deemed intrinsically sufficient for delegation whenever Mode B is active. When the task at hand belongs to one of these classes, spawning is not discretionary: staying inline is a protocol violation, not a judgment call.
+
+- **Large documentation exploration** — multi-document or long-form document traversal, comparison, or synthesis
+- **Mass codebase dives** — cross-file reference hunting, dependency mapping, PR-scale review, bulk pattern search
+- **Wide web search / aggregation of excessive information** — multi-source research where the raw intermediate material would bloat the main session's context
+- **Any task whose raw intermediate material exceeds what the main session should hold** — the generalization of the above; when in doubt, estimate the raw-material volume first, and if it would crowd out governance state in the main context, delegate
+
+When a class-grade trigger fires, the orchestration-only constraint (§4 Hard Rule) applies for the duration of that task: the main session orchestrates and synthesizes only. The "Do NOT spawn" conditions below still override — a class-grade task that requires continuous user interaction or is tightly coupled/sequential stays inline (or is re-scoped until it isn't).
+
 **Do NOT spawn** when:
 
 | Condition | Rationale | Examples |
@@ -71,7 +82,7 @@ These roles serve as the **default set** for software development tasks. Extend 
 ### Extensibility Rules
 
 - **User-defined roles take precedence**: If the user specifies custom roles or role names, use those verbatim
-- **Domain expansion**: This skill may add baseline roles for non-coding domains (e.g., data analysis, creative writing) in future iterations
+- **Cross-domain generalization**: The coding-sense semantics generalize to every domain — map the baseline roles onto non-coding work rather than abandoning them. Examples: **Doc-Explorer** (large documentation traversal/synthesis), **Web-Aggregator** (multi-source search fan-in), **Data-Diver** (bulk dataset profiling), **Draft-Writer** (long-form generation), **Fact-Verifier** (claim cross-referencing). The role names change per domain; the horizontal-composition rule, max depth 1, and the orchestration-only constraint on the main session do not
 - **Horizontal only**: Each role covers a different *concern* at the same *level*. Never assign a role whose job is to "manage other subagents"
 - **Max depth = 1**: Subagents are **strictly prohibited** from spawning further subagents. If a subagent encounters a sub-subtask, it must either:
   - Complete the sub-subtask inline using its own context and tools
@@ -160,6 +171,16 @@ The main agent still implements CTAGV, but its responsibilities shift from execu
 
 **Key shift**: The main agent's "work" becomes *reviewing, integrating, and adjudicating* subagent outputs (per §7 — with user pre-approval, else escalate) — not producing them directly.
 
+**Hard rule (orchestration-only main session)**: While Subagent-Supervisor Mode is active for a task, the main agent's tool usage is restricted to orchestration actions — spawning subagents, reading their returned reports, and writing governance/state files. Direct edits to task artifacts (code, documents, data) by the main session are prohibited while delegation is available; if the main agent catches itself reaching for an edit tool on task material, that is the signal to write a mandate instead. This mirrors the established orchestrator-worker prompting practice of instructing the lead agent "do not execute tasks yourself — your outputs are plans and evaluations only"; where the harness supports it, structural enforcement (tool partitioning: execution tools available to workers only) is preferred over prompt-level rules, because prompt-level restraint degrades over long contexts.
+
+**Weaker hint (no direct code inspection)**: Even outside edits, the main session *should* avoid reading or inspecting code/task material directly — inspection belongs in explorer/verifier subagents whose compressed returns keep the main context clean. This is a strong default, not an absolute prohibition. Recognized exemptions:
+
+1. **Explicit user approval or request** — the user asks the main session to look at or modify the material directly; this always overrides.
+2. **Deadlocked conflict, small and self-contained** — subagent findings conflict, no result is objectively verifiable as correct, and the confidence-gated tie-breaker subagent (§7 Tie-Breaker Protocol) has returned below the 0.9 threshold with no valid resolution. Even then: **report back and halt for user discretion first**. Direct inspection by the main session is permitted only if the conflict is small enough to be self-contained (a bounded region — a single function, file, or claim — that one focused read can adjudicate) AND the user is unavailable or has pre-approved autonomous handling of small conflicts. Anything larger stays halted pending the user.
+3. **Announced emergency takeover** — per §7, with a visible in-session announcement and ledger entry.
+
+Retries against a deadlocked conflict are bounded (exactly one tie-breaker round, consistent with the max-2 refinement bound in §8) before halting — never loop autonomously.
+
 ---
 
 ## 5. Parallel Execution Patterns
@@ -202,7 +223,7 @@ Main Agent --> Subagent A (approach: static analysis)
           <---- (compare findings; adjudicate conflicts)
 ```
 
-Use when: High-stakes verification requiring cross-method consensus. If subagents disagree, the main agent must adjudicate or **initiate interactive clarification with the user** — never autonomously pick a winner without user awareness.
+Use when: High-stakes verification requiring cross-method consensus. If subagents disagree, route through the §7 Tie-Breaker Protocol (confidence gate ≥ 0.9) or **initiate interactive clarification with the user** — never autonomously pick a winner without user awareness.
 
 ### Pattern D: Event-Driven (Reactive Triggers)
 
@@ -252,7 +273,7 @@ Use when: Evaluating trade-offs between fundamentally different approaches (e.g.
 If a subagent fails or returns unusable output:
 
 1. **Do NOT** spawn another subagent to fix it (depth violation)
-2. Main agent takes over the failed subtask inline, with full context
+2. Main agent takes over the failed subtask inline, with full context — this is a sanctioned breach of the orchestration-only hard rule (§4) and requires: (a) a visible in-session announcement ("delegation failed at X; taking over inline because Y"), (b) a ledger entry recording the breach. If the subtask exceeds inline capacity, re-scope into smaller handoff-ready pieces and delegate fresh BEFORE taking over
 3. If the subtask is too large for inline work: re-scope into smaller, handoff-ready pieces and delegate fresh
 
 ### Conflicting Subagent Results
@@ -263,6 +284,13 @@ If subagents return conflicting or divergent results:
 2. Include: what each subagent concluded, what evidence/method they used, and the trade-offs
 3. **Prefer interactive clarification** — let the user adjudicate
 4. Only autonomously resolve when: (a) one result is objectively verifiable as correct, (b) the other is demonstrably wrong by the same verification standard, AND (c) the user has pre-approved autonomous adjudication; otherwise escalate to interactive clarification.
+5. **Tie-Breaker Protocol (default instrument when two subagents' findings conflict)**: when two subagents return conflicting findings, spawn at most ONE third tie-breaker subagent (bounded per §8's max-2 refinement spirit — no repeated tie-breaker loops). The tie-breaker operates under these rules:
+   - **Input**: the original task context plus BOTH conflicting findings in full, presented neutrally — no main-session commentary, no hints about which finding the main session favors
+   - **Task**: judge the confidence of EACH finding through **independent exploration** — re-verify the contested claims against the underlying material itself (code, documents, sources), not merely compare the two reports rhetorically. Evidence-grounded adjudication is required because naive LLM-as-judge comparison is vulnerable to fluency bias, self-preference, and shared-backbone blind spots; where the harness permits, instantiate the tie-breaker with a different method or backbone than the conflicting pair
+   - **Confidence gate**: the tie-breaker issues a conclusion ONLY when its confidence in one finding is **≥ 0.9**, stated as a numeric score per finding and backed by the specific evidence gathered during independent exploration — a bare self-rating without an evidence trail does not count as confidence (LLM self-reported confidence is imperfectly calibrated; the evidence requirement is the calibration substitute)
+   - **Below threshold**: if neither finding reaches 0.9, the tie-breaker returns both scores plus the gathered evidence, and the matter MUST be reported back to the human for discretion — no autonomous resolution below the gate
+   - **Main-session non-intervention**: while the tie-breaker runs, the main session MUST NOT intervene — no supplementary reads of the contested material, no hints, no mid-flight re-scoping, no pre-judgment. Its only permitted actions are waiting and recording the delegation in the progress ledger
+6. **Deadlock path**: if the tie-breaker returns below the 0.9 gate, **report back and halt for user discretion**. The main session may inspect the conflicting material directly only under the small-and-self-contained exemption in §4 (Weaker hint, exemption 2); otherwise it waits.
 
 ### Context Bloat Despite Subagents
 
@@ -298,4 +326,6 @@ When subagent orchestration is active, these five rules are testable on every ru
 2. **Max depth 1**: no subagent ever spawns another subagent.
 3. **Mandate required**: every delegation carries a complete mandate brief — no implicit context.
 4. **No competing subagents**: mandate scopes are non-overlapping; no duplicate or rival subagents.
-5. **Output conflicts escalate**: conflicting subagent outputs go to the user for interactive clarification, unless the user pre-approved autonomous adjudication.
+5. **Output conflicts escalate**: conflicting subagent outputs go to the §7 Tie-Breaker Protocol (one round, conclusion only at confidence ≥ 0.9 grounded in independent exploration) or to the user for interactive clarification; below the 0.9 gate, the conflict MUST go to the user — no autonomous adjudication below threshold, and no main-session intervention while the tie-breaker runs.
+6. **Class-grade triggers are mandatory**: when the task belongs to a Heavy-Context Task Class (§1) and Mode B holds, delegation is required — staying inline is a violation, not a judgment call.
+7. **Orchestration-only main session**: no direct edits, bulk exploration, or code inspection in the main session while delegation is available — governance files, explicit user request, the small-and-self-contained deadlock exemption (§4), and announced §7 emergency takeovers excepted.
