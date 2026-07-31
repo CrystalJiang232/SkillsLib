@@ -76,7 +76,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 **Process**: Read [references/clarification-protocol.md](references/clarification-protocol.md)
 
 **Summary**:
-- Raise each ambiguous point with: pending question, potential options with trade-offs, and recommended default with justification
+- Raise each ambiguous point with: pending question, potential options, and recommended default with justification; options follow the tiered format — code-type tasks MANDATORILY require plan brief & insights, cascading-change analysis, critical-segment diff preview, and trade-off analysis per option — except architectural-level decisions (workflow, API behavior contracts, business-logic amendments), where the preview may be omitted or expressed abstractly (BEFORE/AFTER, flow descriptions, contracts, or any fitting form); non-code-type non-trivial tasks apply the same semantics with a relaxed, domain-fit preview format (see clarification-protocol.md, Option Depth Tiers)
 - Defer all work until user explicitly permits or all points are resolved
 - If mid-work barriers emerge, pause and re-enter clarification
 - No code generation without explicit permission terms ("permitted"/"cleared"/"generate")

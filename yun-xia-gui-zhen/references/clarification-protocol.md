@@ -9,6 +9,8 @@ Defer all work until requirements are explicit and exact. This protocol governs 
 Activate when ANY of these conditions are met:
 - Task description contains words like "maybe", "probably", "whatever", "simple", "just", "similar to"
 - Multiple valid implementation approaches exist
+- Task is code-type (implementation, refactor, API/SPI change) AND clarification is entered → the Tier-2 option format below is MANDATORY, not optional
+- Task is non-code-type but non-trivial AND clarification is entered → the Tier-1 option format below applies (weak trigger: same semantics, relaxed format)
 - Business logic involves filtering, thresholds, or conditional rules
 - Output format, target environment, or constraints are unspecified
 - User says "do what you think is best" without prior established patterns
@@ -43,6 +45,79 @@ For each ambiguity point, produce a structured entry:
 
 **Default**: [Option X] — [one-sentence reason]
 ```
+
+### Option Depth Tiers
+
+**Tier 2 — Code-type tasks (MANDATORY when the code-type trigger above fires).**
+
+Every option MUST carry all four sections below, with verbatim section labels. Keep each section to 1–3 sentences; the diff preview shows only the minimal critical segment (~5–8 lines), not a full patch. Cascading changes must name concrete symbols (functions, interfaces, modules), not abstractions.
+
+**Exception — architectural-level decisions:** When the clarification point concerns non-code-level decisions within a code task — overall workflow, API behavior contracts, business logic amendments, or any architectural design choice — the diff-style preview MAY be omitted, or expressed in any abstract form that fits: BEFORE/AFTER behavior tables, sequence or flow descriptions, contract statements, pseudo-signatures, or any equivalent representation. Do NOT confine the preview to a fixed set of expressions; the requirement is that the change be made concrete and reviewable, not that it look like a diff. All other sections (plan brief, cascading changes, trade-off analysis, recommended default) remain mandatory regardless.
+
+```markdown
+### Clarification N: [Short Title]
+
+**Question:** [One-sentence exact aspect awaiting decision]
+
+**Option A: [name]**
+
+**Plan brief and insights:** [what this approach does, key insight]
+
+**Cascading changes:** [API/SPI behavior, business logic/semantics,
+architecture-level program behavior affected — name concrete symbols]
+
+**Critical code diff preview:**
+```diff
+-old_critical_segment()
++new_critical_segment()
+```
+
+**Trade-off analysis:** [honest upsides AND downsides — state what this option loses]
+```
+
+After the last option, once per clarification point:
+
+```markdown
+**Recommended default: Option X.** [reason arguing from design principle,
+explicitly dismissing weaker justifications where relevant]
+```
+
+Anchoring example (canonical form, from a C++ accept-loop fix):
+
+```markdown
+**Option A: Pass a validated `tcp::endpoint` by value**
+
+**Plan brief and insights:** Perform one non-throwing lookup in
+`do_accept()`. Reject that peer and continue on failure. Pass the endpoint
+by value to `server`, which formats and owns the connection ID.
+
+**Cascading changes:** `connectionFactory`, its lambda, and
+`server::create_connection()` gain a `tcp::endpoint` parameter. The socket
+formatter is removed. Registration and session semantics remain under `server`.
+
+**Critical code diff preview:**
+```diff
+-auto peer = socket.remote_endpoint();
++boost::system::error_code ec;
++auto peer = socket.remote_endpoint(ec);
++if (ec) { LOG_WARN(...); continue; }
++factory(std::move(socket), peer, core_id, io);
+```
+
+**Trade-off analysis:** Best match for the apparent architecture and future
+structured peer data. It changes an internal interface, which is acceptable
+here. Address presentation still needs a checked conversion inside `server`.
+
+**Recommended default: Option A.** It removes duplicate inspection while
+preserving `server` ownership of identity policy — for architectural
+reasons, not compatibility.
+```
+
+**Tier 1 — Generalized (weak trigger: any non-code-type but non-trivial task entering clarification).**
+
+The same semantics apply — plan brief and insights, cascading changes, change preview, trade-off analysis, recommended default with reason — but the format is relaxed: the strict `diff`-style preview is NOT required. Instead, show the changes in whatever form fits the domain: sampled/critical intentions, before→after outline, excerpt preview, schema or sample-output preview, or step-sequence preview. "Cascading changes" generalizes to impact on downstream consumers, existing artifacts, and prior decisions. Section labels should still be recognizable, but brevity and domain-fit take precedence over rigid structure.
+
+> **TODO (placeholder for future completion):** An anchoring output sample for non-code-type tasks is currently ABSENT. Until one is added, refer to the Tier-2 code-type anchoring example above and adapt its semantics to the domain. This placeholder marks a known gap for future implementation/addition/completion of this skill.
 
 ### Phase 3: Await Resolution
 
