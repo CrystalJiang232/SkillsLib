@@ -15,4 +15,5 @@ for dir in */; do
         mv "$target" "${target}.bak.${n}"
     fi
     python utils/package_skill.py $base bin/
+    rm -rf utils/__pycache__/
 done
