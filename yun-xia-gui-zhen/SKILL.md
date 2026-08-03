@@ -31,6 +31,8 @@ Before applying any protocol in this skill, determine which mode applies:
 
 This check is mandatory at skill load time. Do not proceed with protocol selection until the mode is determined.
 
+**Channel check (also mandatory at load time)**: determine whether the host exposes an interactive clarification/approval channel — e.g. a tool named `ask_user` or any similarly purposed tool/hook under another name — and record `CHANNEL: available|absent|unknown` in the constraints file. Universal Principle 8 applies regardless of the result.
+
 ## Protocol Selection Matrix
 
 |                          Situation                          |        Primary Protocol        |        Secondary         |
@@ -65,6 +67,8 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 7. **Prefer Interactive Clarification Over Autonomous Resolution** — Interactive clarification with the user is always the unconditional default unless the user explicitly skips it or approves neglecting it: when subagent outputs conflict, or user instructions are ambiguous, present the conflict to the user rather than picking winners autonomously.
 
+8. **Clarification Channel Discipline** — When an interactive clarification/approval channel exists (`ask_user` or similarly purposed tools/hooks): an empty, system-default, or timeout response means **deferred, never approved** — halt the entire round, persist decisions and a next-round proposal to state files, and await the user. Never use the channel to ask how to perform work the user has forbidden or not yet permitted. User-shown channel preference (pro or con) overrides skill defaults. This principle is binding even when interactive clarification itself is waived. Full rules: references/clarification-protocol.md, "Clarification Channel Governance".
+
 ## Protocol Details
 
 ### Core Protocols
@@ -81,6 +85,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - If mid-work barriers emerge, pause and re-enter clarification
 - No code generation without explicit permission terms ("permitted"/"cleared"/"generate")
 - Maintain pending-clarification state in-file and reference it in every output until resolved
+- Channel rules (binding even when clarification is waived): empty/system-default channel response ⇒ defer + halt the round + persist state; no channel questions about forbidden/unpermitted edits; user channel preference overrides defaults (see clarification-protocol.md, Clarification Channel Governance)
 
 #### 2. Reference Verification
 

@@ -308,7 +308,7 @@ If the main agent context is still overloaded despite using subagents:
 - **Progress ledger**: the supervisor tracks per-subagent status; a stall (no update after N actions) triggers replanning or inline takeover by the main agent.
 - **Delegation logging**: handoffs and delegation decisions are logged so a visible state audit trail exists.
 - **Guardrails**: where the harness allows, external non-bypassable checks (file-scope allowlists, CI gates) complement the in-prompt rules in this file.
-- **Termination & escalation**: termination conditions must be explicit before any fan-out; escalation modes (never / on-failure / always) are decided upfront; large fan-outs pass a human plan-review gate first.
+- **Termination & escalation**: termination conditions must be explicit before any fan-out; escalation modes (never / on-failure / always) are decided upfront; large fan-outs pass a human plan-review gate first. Escalations that return an empty/system-default response follow Clarification Channel Governance §A (clarification-protocol.md): the point defers and the round halts — it is never an approval.
 - **Tool-risk tiering**: classify tools by risk before delegation — read-only vs writable, reversibility, and financial impact. Irreversible high-risk actions (e.g., destructive writes, payments, production changes) trigger human takeover before execution. The human plan-review gate for large fan-outs above is a subset of this general clause.
 - **Voting/debate**: for high-stakes single decisions, run the task multiple times and aggregate (voting) or use structured debate rounds.
 - **Citation/attribution verification**: fan-in synthesis of multi-subagent research claims is cross-referenced against reference-verification.md before acceptance.

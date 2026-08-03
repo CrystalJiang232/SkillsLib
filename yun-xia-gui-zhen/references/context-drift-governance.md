@@ -73,6 +73,20 @@ Comprehensive task list with full detail:
 [How to verify this task is correctly completed]
 ```
 
+### Channel & Deferred-State Fields
+
+The constraints file additionally carries `CHANNEL: available|absent|unknown` (set at skill load, per SKILL.md entry point) and `CHANNEL_PREFERENCE: default|prefer-ask|no-ask` (updated whenever the user expresses one). When a round is halted per Clarification Channel Governance §A (clarification-protocol.md), append a `next_round_proposal` block to the constraints file:
+
+```markdown
+## Next-Round Proposal (UNEXECUTED)
+Basis: decisions [D1..Dn] (resolved points above)
+Deferred points: [list]
+Proposed work upon resolution: [concrete proposal]
+Status: DO NOT EXECUTE until deferred points are resolved
+```
+
+On any new round opening with an `UNEXECUTED` next-round proposal, read it before planning; executing it before the linked deferred points resolve is a protocol violation.
+
 ### 3. Verification Hooks File (`/tmp/qrh-session/verification.md`)
 
 Designated by user or derived from constraints (stricter wins). Apply **Verification Hooks** pattern: embed specific, checkable conditions:

@@ -135,6 +135,35 @@ Code generation is PROHIBITED until ONE of these conditions is met:
 
 **If in doubt about permission: default to analyst mode (no writing).**
 
+The gate also covers the channel itself: asking clarification questions about forbidden or unpermitted edits via an ask_user-class tool is prohibited (Clarification Channel Governance §B).
+
+## Clarification Channel Governance
+
+**Applicability**: This section governs any interactive clarification/approval channel exposed by the host — a tool named `ask_user`, an approval-request tool, or any similarly purposed tool/hook that returns user answers in-session. Determine presence/absence/name at skill load time and record it in the constraints file (`CHANNEL: available|absent|unknown`). If no such channel exists, §B/§C read with "the channel" as "structured clarification questions by any means", and §A is inert.
+
+### §A — Empty/Default Response Handling
+
+An empty response, system-default auto-response, or timeout-fallback from the channel is NOT a resolution and NOT consent to "proceed with default". Upon receiving one, the agent MUST, in order:
+
+1. Mark every point raised in that channel call as `deferred` in the pending-clarifications file.
+2. Halt the entire round — no further generation/modification/tool calls on task material, even for points answered earlier in the round. Phase 3's "just proceed → apply defaults" branch does NOT apply.
+3. Persist before halting: (a) decisions made so far (resolved points + rationale) to the constraints file; (b) a `next_round_proposal` block (see context-drift-governance.md) carrying any work proposal derivable from those decisions, marked `UNEXECUTED`; (c) the deferred points with the exact questions to re-ask.
+4. End output with the notice template below and await the user's next message. Resumption requires explicit user answers.
+
+```markdown
+Round halted: clarification returned an empty/system-default response.
+Deferred: [points]. State persisted to [state-file path]; next-round proposal is UNEXECUTED.
+Awaiting your answer on the deferred points.
+```
+
+### §B — No Clarify-Into-Forbidden-Work
+
+If the user has said "defer work"/"no code/workspace edits", or has not explicitly permitted modifying specific files, the agent MUST NOT use the channel to ask *how* to perform those modifications — asking a user who forbade edits "which edit do you prefer" is itself a protocol violation. The agent may state in plain text what it would clarify once permitted, and waits.
+
+### §C — User Channel Preference Override
+
+Explicitly shown user preference about the channel overrides this skill's defaults, in both directions: "prefer ask_user"/"ask me dynamically during work" → invoke the channel actively; "do not use ask_user"/"halt after each round" → never invoke it, use plain-text questions and stop. Record the preference in the constraints file (`CHANNEL_PREFERENCE: default|prefer-ask|no-ask`).
+
 ## Mid-Work Barrier Detection
 
 During execution, monitor for these signals:
