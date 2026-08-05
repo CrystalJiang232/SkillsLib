@@ -110,7 +110,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - Before any work: write constraints file, comprehensive TODO file, and verification hooks file
 - Read constraint file before every task (repetitive reading is required, not redundant)
 - Explicitly show all five phases in-session with actual tool calls
-- Place intermediate files in `/tmp/` subdirectories; do not pollute workspace
+- Place intermediate files in the OS-specific temp directory by default (`/tmp` / `$TMPDIR` / `%TEMP%`; user-overridable); temp-file cleanup — covering code-work byproducts, unsure-files defaulting to keep, externally-depended files (db/log) exempt — is the FINAL verification hook; do not pollute workspace
 
 #### 4. QRH Generator Mode
 

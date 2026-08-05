@@ -109,6 +109,7 @@ Designated by user or derived from constraints (stricter wins). Apply **Verifica
 - [ ] No syntax errors in generated code
 - [ ] Session state files updated
 - [ ] All hard constraints from constraints.md satisfied
+- [ ] FINAL: Temporary files cleaned up — ALL intermediates incl. code-work byproducts and Cleanup Registry paths; externally-depended files (db/log) exempt; when unsure a file is safe to delete, leave it. Default behavior; waived or relocated only by explicit user instruction (record waiver in constraints file)
 ```
 
 ## Phase-by-Phase Execution Rules
@@ -142,7 +143,7 @@ Gather context from all relevant sources:
 
 - Execute the actual work
 - Prefer editing existing files over creating new ones
-- Keep intermediate files in `/tmp/` subdirectories
+- Keep intermediate files in the OS-temp session subdirectory (see File Hygiene); redirect code-work byproducts there where the toolchain allows, else record them in the Cleanup Registry
 - Do not pollute the workspace with temporary files
 - Show generation actions explicitly
 
@@ -227,8 +228,17 @@ A verification hook must be:
 
 ## File Hygiene
 
-- **Location**: All session state files under `/tmp/qrh-session/` or similar
-- **Cleanup**: Remove `/tmp/qrh-session/` after session completes
+- **Location**: Session state files and intermediate files go to the OS-specific temporary directory by default — `/tmp` on Linux, `$TMPDIR` on macOS (falling back to `/tmp`), `%TEMP%` on Windows — under a session subdirectory (e.g. `qrh-session/`). Landing them anywhere else requires explicit user specification.
+- **Code-work intermediates**: when code work or program execution generates byproducts (compiler/interpreter/build artifacts, caches, downloaded fixtures), redirect them to the temp directory where the toolchain allows (environment variables, output flags, working-directory choice); where redirection is not possible, record each path in the state file's Cleanup Registry (below) for cleanup reference.
+- **Exemption — externally-depended files**: files that external processes or later user-instructed runs depend on — notably database files and log files produced during user-instructed program execution — are NOT intermediate files; they stay in place and are excluded from cleanup.
+- **Cleanup Registry**: the state file carries a running block:
+
+```markdown
+## Cleanup Registry
+- [path] — [origin: which task/step produced it] — [ ] cleaned
+```
+
+- **Cleanup**: temporary files are cleaned up as the FINAL verification hook (see Verification Hooks) — final so that verification never depends on files already deleted. The duty covers ALL generated files: code-work byproducts and intermediates alike. When unsure whether an auto-generated file is safe to delete (unidentifiable files beyond common byproducts), default to NOT cleaning it up. Waivers: explicit user instruction may waive cleanup entirely or relocate it (e.g. "keep the build dir for inspection"); record any waiver in the constraints file.
 - **Workspace**: Only final deliverables in the workspace
 - **No pollution**: Never write intermediate state to the project directory
 

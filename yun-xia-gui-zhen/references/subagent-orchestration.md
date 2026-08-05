@@ -152,7 +152,7 @@ Before returning, the subagent confirms its report includes a 3-item checklist:
 
 - **No implicit context**: The subagent receives *only* what's in the mandate
 - **No side effects**: The subagent returns *only* the expected output — no file writes, no state changes, unless explicitly scoped in the mandate
-- **Clean workspace**: Intermediate work products stay in `/tmp/`; only deliverables return to main agent
+- **Clean workspace**: Intermediate work products stay in the OS-temp session directory (per context-drift-governance.md, File Hygiene); only deliverables return to main agent
 - **No competing subagents**: If multiple subagents are given related tasks, their mandates must have non-overlapping scopes. Never pit subagents against each other to "see who does better"
 
 ---
