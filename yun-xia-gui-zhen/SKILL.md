@@ -140,7 +140,8 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - Use the Handoff Contract (mandate format) for every subagent delegation
 - Compose subagent roles horizontally (concern-based), never vertically
 - Max depth = 1: subagents must NOT spawn further subagents
-- Prefer Fan-Out over Pipeline with coordination layer (mandates, verification, termination); use Event-Driven and Peer-to-Peer where suited
+- Execution patterns are selected by dependency structure, not preference: Fan-Out for independent parallelizable concerns; Pipeline for dependent stages; Chunked Sequential Edit for large single-artifact edit/write tasks (strictly sequential implementers — never parallel on one artifact — with a shared Artifact State Log and a mandatory staleness guard: re-read/hash-compare before every write); real projects are usually hybrid — fan out across modules, sequence within a shared artifact; use Event-Driven and Peer-to-Peer where suited
+- The progress ledger is the recovery map: session memory does not survive compaction — trust the ledger over recollection and never re-dispatch completed units
 - If subagent outputs conflict, prefer interactive clarification over autonomous adjudication
 - The reference file additionally provides coordination and failure-governance rules: bounded verification retries, progress ledger, explicit termination, and escalation to the user
 - Concurrency scales with task effort: default 1 agent (inline); comparison tasks warrant 2–4 subagents; large genuinely-parallel research tasks may reach 5–7 (extreme research 10+, requiring a human plan-review gate) — 5–7 is a conditional ceiling, not a recommendation

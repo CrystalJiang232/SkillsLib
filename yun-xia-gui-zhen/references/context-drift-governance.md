@@ -163,6 +163,21 @@ When subagent orchestration (Mode B) is active, extend the CTAGV state files and
 - **Stall detection**: no progress update from a subagent after N actions/checkpoints → forced replan, re-delegation, or inline takeover.
 - **Bounded verification**: max 2 refine-retry rounds per verification loop; on non-convergence, escalate to the user (interactive clarification) rather than looping or autonomously adjudicating.
 - **Conflict adjudication**: autonomous adjudication only where objectively verifiable criteria exist AND the user has pre-approved it; otherwise escalate to interactive clarification.
+- **Artifact State Log (required for chunked edits)**: when a large edit/write task is split into sequential chunks (subagent-orchestration.md §5 Pattern F), the state files carry an artifact-state log shared across chunk executors:
+
+```markdown
+## Artifact State Log — [task name]
+
+| File | Last chunk | Hash/mtime after write |
+|------|-----------|------------------------|
+| [path] | chunk N | [hash or mtime] |
+
+Completed chunks: [one-line outcome each]
+Decisions: [D1: ...]
+Symbols introduced: [names + locations, so later chunks never reference unknown code]
+```
+
+Each chunk executor MUST, before writing any shared file, re-read it or compare its hash/mtime against this log; a mismatch means STALE — abort the chunk and report back. Blind overwrites are a protocol violation.
 
 ## Mode A — Iteration Caps & Termination Conditions
 
@@ -170,6 +185,7 @@ For Mode A (single-agent CTAGV), each task must set an explicit satisfiable term
 
 - **Termination condition**: a concrete, satisfiable criterion defining when the task is done (tied to the task's verification hooks).
 - **Iteration/step cap**: a hard maximum on loop iterations or steps. The cap is an alarm, not a cure — hitting it triggers replan or escalation to interactive clarification, mirroring the Mode B bounded-verification rule, rather than continued looping.
+- **Chunked execution for large edits**: a large single-session edit/write task is split into ordered chunks rather than carried in one stretch. Between chunks, checkpoint decisions and per-file state (hash/mtime) to the state file, and re-read the target file before each chunk write — the Mode B Artifact State Log's staleness guard, applied inline. Context drift makes an un-checkpointed long edit session prone to the same stale-overwrite failure as unlogged sequential subagents.
 
 ## Verification Hooks Pattern (Extended)
 

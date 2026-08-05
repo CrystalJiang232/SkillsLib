@@ -14,7 +14,7 @@
 - [2. Role Taxonomy — Horizontal Decomposition Only](#2-role-taxonomy--horizontal-decomposition-only)
 - [3. Handoff Contract — State Passing](#3-handoff-contract--state-passing)
 - [4. Main Agent as Supervisor — CTAGV Re-mapping](#4-main-agent-as-supervisor--ctagv-re-mapping)
-- [5. Parallel Execution Patterns](#5-parallel-execution-patterns)
+- [5. Execution Patterns](#5-execution-patterns)
 - [6. Anti-Patterns](#6-anti-patterns)
 - [7. Emergency Procedures](#7-emergency-procedures)
 - [8. Coordination & Failure Governance](#8-coordination--failure-governance)
@@ -52,7 +52,7 @@ When a class-grade trigger fires, the orchestration-only constraint (§4 Hard Ru
 | **Locally context-dependent task** | Requires understanding of the ongoing conversation flow | "Explain what you just did", "Why did you choose that approach?" |
 | **Trivially completable** | Inline execution is faster than orchestration overhead | A single file edit, a one-line grep, answering a straightforward factual question |
 | **Continuous user interaction** | Subagents lack direct user access; mid-flight clarification is impossible | Any task likely to require user feedback before completion |
-| **Tightly coupled / sequential dependencies** | Each step depends on the previous one's output; parallelism gains are illusory and handoff costs dominate | Multi-stage refactors where stage N edits what stage N-1 produced |
+| **Tightly coupled / sequential dependencies** | Each step depends on the previous one's output; parallelism gains are illusory and handoff costs dominate | Multi-stage refactors where stage N edits what stage N-1 produced. **Exception**: a large single-artifact edit/write task delegates via Chunked Sequential Edit (§5 Pattern F) — sequential, not parallel |
 
 ---
 
@@ -183,7 +183,16 @@ Retries against a deadlocked conflict are bounded (exactly one tie-breaker round
 
 ---
 
-## 5. Parallel Execution Patterns
+## 5. Execution Patterns
+
+### Pattern Selection — No Pattern Is Intrinsically Superior
+
+Choose by the task's **dependency structure**, not by preference:
+
+- **Independent, parallelizable concerns → Fan-Out** (Pattern A)
+- **Dependent stages, each context-heavy → Pipeline** (Pattern B)
+- **One large artifact or tightly-coupled artifact set, edit/write-type → Chunked Sequential Edit** (Pattern F)
+- Real projects are usually **hybrid (project-based structure)**: fan out across independent modules/concerns, then run Pipeline or Chunked Sequential Edit *within* each shared artifact
 
 ### Pattern A: Fan-Out (Independent Concerns)
 
@@ -195,7 +204,7 @@ Main Agent --> Subagent A (concern X)
           <---- (synthesize A + B + C results)
 ```
 
-Use when: Multiple concerns can be evaluated independently. Each subagent handles a distinct dimension of the same input. Fan-Out is preferred over Pipeline only when the coordination layer is in place — mandate briefs, verification, and termination conditions for every spawned subagent.
+Use when: Multiple concerns can be evaluated independently. Each subagent handles a distinct dimension of the same input. Requires the coordination layer in place — mandate briefs, verification, and termination conditions for every spawned subagent.
 
 **Example**: A PR review spawning one subagent per concern (correctness, concurrency, performance, safety).
 
@@ -211,7 +220,7 @@ Main Agent --> Subagent A (explore/discover)
              Subagent C (verify, using B's output)
 ```
 
-Use when: Later steps fundamentally depend on earlier outputs. **Prefer to avoid** — sequential chains are slower than inline single-agent work. Only use when each stage is itself context-heavy enough to justify the handoff cost.
+Use when: Later steps fundamentally depend on earlier outputs AND each stage is context-heavy enough to justify the handoff cost. Sequential chains add wall-clock latency per stage — that is a cost to budget, not a defect of the pattern.
 
 ### Pattern C: Swarm (Same Task, Multiple Angles)
 
@@ -250,6 +259,29 @@ Main Agent --> Subagent A (produces solution Alpha)
 
 Use when: Evaluating trade-offs between fundamentally different approaches (e.g., sync vs async architecture, SQL vs NoSQL migration). Both solutions are valid — the choice requires user judgment. **Always escalate to user** when peer outputs conflict on approach selection.
 
+### Pattern F: Chunked Sequential Edit (Large Single-Artifact Tasks)
+
+```
+Main Agent (supervisor, owns Artifact State Log)
+    |
+    |--> Chunk-1 implementer (edits shared artifact) --> review --> ledger: "chunk 1 complete"
+    |--> Chunk-2 implementer (fresh, reads State Log) --> review --> ledger: "chunk 2 complete"
+    |--> ...
+    |
+    <---- (final broad review across all chunks)
+```
+
+Use when: a single edit/write task on one artifact (or a tightly-coupled artifact set) exceeds what one subagent can reliably carry — very large files, long multi-part documents, plan-scale implementation. Do NOT hand it to one long-running subagent; split it into ordered chunks and dispatch **one fresh implementer subagent per chunk, strictly sequentially**. Never run implementer subagents in parallel on the same artifact — write conflicts and stale overwrites are the documented failure (stale-overwrite incidents have destroyed hours of sequential subagent work in practice).
+
+Binding rules (derived from subagent-driven-development practice and observed incident reports):
+
+1. **Shared Artifact State Log** — the supervisor maintains it in the state files (spec in context-drift-governance.md): per-file hash/mtime after each chunk, completed chunks with one-line outcomes, decisions made, and symbols introduced (so later chunks never reference unknown code).
+2. **Staleness guard (mandatory)** — before writing any shared file, a chunk implementer MUST re-read the file or compare its hash/mtime against the State Log. Mismatch ⇒ report `STALE`, abort the chunk; the supervisor refreshes the brief and re-dispatches. Blind overwrites are a protocol violation.
+3. **Artifacts as files, not prompt text** — each chunk dispatch carries a brief *file path* (the chunk's requirements, exact values), one line on where the chunk fits, and pointers to State Log entries it depends on. Never paste accumulated prior-chunk history into a dispatch; a fresh implementer needs its chunk, the interfaces it touches, and the global constraints — nothing else.
+4. **Status protocol** — implementers report `DONE` / `DONE_WITH_CONCERNS` / `NEEDS_CONTEXT` / `BLOCKED`. A `BLOCKED`-because-too-large chunk is re-chunked smaller; never force the same subagent to retry unchanged.
+5. **Ledger as recovery map** — one completion line per chunk in the progress ledger. Session memory does not survive compaction; trust the ledger over recollection, and never re-dispatch a chunk the ledger marks complete — re-dispatching completed work is the single most expensive orchestration failure observed in practice.
+6. **Review per chunk + final broad review** — each chunk's diff is verified before the next chunk dispatches; one broad review runs across the whole artifact at the end (fixes dispatched as ONE fix subagent for all findings, not one per finding).
+
 ---
 
 ## 6. Anti-Patterns
@@ -259,7 +291,8 @@ Use when: Evaluating trade-offs between fundamentally different approaches (e.g.
 | **Over-spawning** | Token cost balloons; trivial tasks cost more via orchestration overhead than inline execution | Check Decision Matrix — trivial tasks stay inline |
 | **Vertical nesting (depth > 1)** | Subagent spawns subagent → exponential error cascade, context loss, unaccountable failures | Max depth = 1, strict; subagent reports back, main agent re-delegates if needed |
 | **Vague mandates** | Subagent lacks clarity → returns garbage → main agent context wasted anyway | Handoff Contract: exact input, exact output, exact constraints |
-| **Sequential pipeline overuse** | Each subagent adds latency; 3 sequential subagents = 3x wall clock time | Prefer Fan-Out (with the coordination layer in place); Pipeline only when each stage is independently context-heavy |
+| **Sequential pipeline overuse** | Each subagent adds latency; 3 sequential subagents = 3x wall clock time | Re-check dependency structure (§5 Pattern Selection): Fan-Out only for genuinely independent concerns; Pipeline only when each stage is independently context-heavy |
+| **Parallel implementers on one artifact** | Concurrent writes to a shared file → conflicts, stale overwrites, silent loss of earlier chunks' work | Chunked Sequential Edit (§5 Pattern F): strictly sequential implementers + Artifact State Log + mandatory staleness guard |
 | **Competing subagents** | Pitting subagents against each other wastes tokens, creates conflicting outputs, and removes user agency | Assign non-overlapping scopes per mandate; if approaches conflict, escalate to user for clarification |
 | **No synthesis plan** | Main agent drowns in disconnected subagent outputs | Define Expected Output in every mandate; have integration strategy before spawning |
 | **Autonomous conflict resolution** | Main agent picks winners between conflicting subagent outputs without user input | Interactive clarification: present conflict, sources, and trade-offs; let user decide |
@@ -313,7 +346,7 @@ If the main agent context is still overloaded despite using subagents:
 - **Voting/debate**: for high-stakes single decisions, run the task multiple times and aggregate (voting) or use structured debate rounds.
 - **Citation/attribution verification**: fan-in synthesis of multi-subagent research claims is cross-referenced against reference-verification.md before acceptance.
 - **Failure-taxonomy awareness**: industry trace studies (e.g., MAST, UC Berkeley 2025) show inter-agent misalignment and verification/termination failures dominate multi-agent failures; structural fixes (this section) outperform prompt tweaks.
-- **Blackboard/shared-state**: file-based shared artifacts may substitute free-form message passing for auditability (optional, advanced).
+- **Blackboard/shared-state**: file-based shared artifacts may substitute free-form message passing for auditability (optional, advanced) — except for chunked edits (§5 Pattern F), where the Artifact State Log is required, not optional.
 - **When NOT to fan out**: sequential or tightly-coupled tasks, budget-sensitive contexts, and tasks that fit one context window all stay inline.
 
 ---
