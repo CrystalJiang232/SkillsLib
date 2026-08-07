@@ -1,187 +1,274 @@
 ---
 name: gitloong
 description: >
-  Fetch unresolved, code-tied merge request review comments from a self-managed
-  GitLab instance (点墨成龙). Automates the full pipeline: detect open MR from
-  current git branch, authenticate via token, retrieve discussion threads via
-  GitLab API, filter to unresolved inline comments only, and write structured
-  JSON for downstream agent consumption. Use when the task involves: (1) Pulling
-  pending MR review comments from GitLab, (2) Preparing code review context for
-  an agent to act upon, (3) Checking unresolved feedback on a merge request,
-  (4) Any workflow where a coding agent needs to see what reviewers have
-  requested before resolving comments. Triggers on git repositories with GitLab
-  remotes and open merge requests.
+  Fetch unresolved GitLab merge request discussions from a self-managed
+  GitLab fork workflow. Use when a repo has origin as the private/source remote
+  and one additional remote as the upstream/target project, and the agent needs
+  structured unresolved MR review comments for follow-up processing.
 ---
 
-# GitLoong (点墨成龙)
+# GitLoong
 
-Fetch unresolved, code-tied review comments from a GitLab merge request and
-write them as structured JSON for downstream agent processing.
+Use `scripts/fetch_comments.py` from the target git repository. The script is
+intentionally quiet: rely on exit codes and JSON output.
 
-## Workflow
+## Error-Prone Policy
 
-1. Verify credentials (`auth.json` in skill directory)
-2. Derive GitLab URL and project path from `git remote get-url origin`
-3. Detect open MR from current branch
-4. Fetch all discussion threads via GitLab API
-5. Filter to unresolved, code-tied (position-linked) threads
-6. Write JSON output file
+This workflow is strict. If any precondition or validation step fails, halt and
+ask the user to check or provide the missing information. Do not invent remotes,
+guess MR IDs, switch projects, change URLs, retry with alternate auth styles, or
+apply spontaneous workarounds. Troubleshooting probes are allowed only after the
+main command fails, and only to explain the failure.
 
-## Prerequisites
+## MR IID Gate
 
-- `git` repo with a GitLab `origin` remote (HTTPS or SSH)
-- `curl` and `python3` available in environment
-- GitLab Personal Access Token with `read_api` scope
+Before every invocation of either script, ask the user for the target-project
+MR IID and halt until the user explicitly provides it. Do not infer, retain, or
+reuse an IID from an earlier message, artifact, command history, or
+configuration file. Pass only that explicit value through `--mr-iid`.
 
-## Credential Setup
+## Required Config
 
-Locate `auth.json` in this skill's directory (beside `SKILL.md`).
-
-If absent or the token is invalid:
-
-1. Copy `auth.json.template` to `auth.json`
-2. Replace the placeholder with a real token:
-   ```json
-   {"gitlab_token": "glpat-xxxxxxxxxxxxxxxxxxxx"}
-   ```
-3. Obtain a token from: User Settings → Access Tokens → Add new token
-   (scope: `read_api`)
-
-If in-session credential entry is needed, write the file directly. Do not use
-environment variables.
-
-## Core Script
-
-Run `scripts/fetch_comments.py` from within the target git repository:
-
-```bash
-cd /path/to/repo
-python3 /path/to/GitLoong/scripts/fetch_comments.py [--output PATH]
-```
-
-Options:
-| Flag | Default | Purpose |
-|------|---------|---------|
-| `--output` | `gitloong_comments.json` | Output JSON file path |
-| `--test-auth` | — | Verify token and connectivity only, then exit |
-
-Exit codes for programmatic handling:
-| Code | Meaning |
-|------|---------|
-| 0 | Success (or `--test-auth` passed) |
-| 1 | Auth/config error — check `auth.json` token |
-| 2 | Git repo error — not in a repo or no origin remote |
-| 3 | MR detection error — no open MR or ambiguous match |
-| 4 | API/network error — check GitLab availability |
-| 5 | Output/write error |
-
-## What the Script Does
-
-### 1. Read auth.json
-Reads `gitlab_token` from `auth.json` in the skill directory. Halts with
-instructions if missing, unreadable, or token is empty.
-
-### 2. Parse Git Remote
-Runs `git remote get-url origin` to extract:
-- **GitLab base URL**: `https://gitlab.company.com`
-- **Project path**: `group/project`
-
-Supports HTTPS (`https://host/path`) and SSH (`git@host:path`) formats.
-
-### 3. Detect Open MR
-Uses current branch name (`git branch --show-current`) to query:
-```
-GET /api/v4/projects/:id/merge_requests?source_branch=...&state=opened
-```
-
-**If zero matches**: Halt. Prompt user to confirm the branch has an open MR.
-**If more than one match**: Halt. Present the MR list and ask user to resolve
-ambiguity.
-
-### 4. Fetch Discussions
-```
-GET /api/v4/projects/:id/merge_requests/:iid/discussions
-```
-Retrieves all discussion threads (server does not filter by resolved status).
-
-### 5. Filter: Unresolved + Code-Tied
-Applies two filters client-side:
-
-- **Unresolved**: `discussion.resolved == false`
-- **Code-tied**: at least one note has a non-null `position` field
-  (indicating an inline/diff-level comment, not general discussion)
-
-Threads failing either filter are excluded.
-
-### 6. Write JSON Output
-
-Writes a single JSON file with this structure:
+Create `config.json` beside this `SKILL.md`:
 
 ```json
 {
-  "meta": {
-    "project_path": "group/project",
-    "mr_iid": 5,
-    "mr_title": "Add feature X",
-    "mr_web_url": "https://gitlab.company.com/group/project/-/merge_requests/5",
-    "source_branch": "feature-branch",
-    "target_branch": "main",
-    "fetched_at": "2026-06-08T12:00:00+00:00",
-    "gitlab_url": "https://gitlab.company.com",
-    "total_unresolved_code_threads": 2,
-    "total_discussions_checked": 8
-  },
-  "threads": [
-    {
-      "discussion_id": "...",
-      "resolved": false,
-      "created_at": "2026-06-01T10:00:00.000Z",
-      "notes": [
-        {
-          "note_id": 100,
-          "author": "reviewer",
-          "body": "Consider extracting this into a helper function",
-          "created_at": "2026-06-01T10:00:00.000Z",
-          "updated_at": "2026-06-01T10:00:00.000Z",
-          "position": {
-            "base_sha": "abc...",
-            "head_sha": "def...",
-            "start_sha": "abc...",
-            "old_path": "src/module.py",
-            "new_path": "src/module.py",
-            "position_type": "text",
-            "new_line": 42,
-            "old_line": null,
-            "line_range": null
-          }
-        }
-      ]
-    }
-  ]
+    "gitlab_token": "",
+    "drop_thread_contains_user": [
+        "xiaozhou"
+    ]
 }
 ```
 
-### 7. Console Summary
-Prints a human-readable summary of unresolved threads, including file paths and
-line numbers for quick scanning.
+- `gitlab_token`: GitLab token with API read access.
+- `drop_thread_contains_user`: optional usernames. Any thread containing a note
+  from one of these users is excluded.
 
-## Extending the Filter
+## Invocation
 
-The filtering logic lives in `filter_unresolved_code_threads()` within the
-script. To add additional criteria (e.g., exclude comments from certain authors,
-include resolved threads, add date filters), modify that function.
+```bash
+python3.11 /path/to/gitloong/scripts/fetch_comments.py --mr-iid <user-provided-iid> --output .agent/tmp/gitloong_comments.json
+```
 
-The `references/gitlab-api.md` file contains the full API response schema for
-discussion and position objects to guide extensions.
+Use `python3.11` or another Python 3.10+ interpreter. Keep output under
+`.agent/tmp/` unless the user explicitly asks for another path.
 
-## Manual Override (Future Extension)
+Exit codes:
 
-If auto-detect fails or a specific MR is needed without switching branches, the
-script can be extended to accept `--mr-iid` and `--branch` flags to bypass
-detection. These flags are not currently implemented — the workflow expects the
-agent to be on the correct branch.
+| Code | Meaning |
+| --- | --- |
+| 0 | JSON written |
+| 1 | missing or invalid config |
+| 2 | invalid invocation or git remote layout is not `origin` plus one target remote |
+| 3 | MR missing, not open, or source/target project mismatch |
+| 4 | GitLab API or network failure |
+| 5 | output write failure |
 
-## Resources
+## Workflow Contract
 
-- **API reference**: See `references/gitlab-api.md` for endpoint details,
-  response schemas, and filtering rules.
+1. Obtain the explicit user-provided MR IID and pass it through `--mr-iid`.
+2. Read `config.json`.
+3. Inspect `git remote` only.
+4. Require exactly two remotes, one named `origin` and one target remote.
+5. Derive source project from `origin`; derive target project and GitLab base URL
+   from the other remote.
+6. Fetch the target-project MR identified by `--mr-iid`.
+7. Continue only if the MR exists, is open, and its `source_project_id` matches
+   the source project.
+8. Fetch MR discussions, keep unresolved threads whether code-tied or not,
+   apply `drop_thread_contains_user`, drop Jenkins-only discussions, and write
+   JSON.
+
+Failure handling:
+
+- Missing `config.json` or token, or a missing/invalid `--mr-iid`: stop and ask
+  the user.
+- Remote layout not exactly `origin` plus one target remote: stop and ask the
+  user to confirm the repository setup.
+- MR missing, closed, merged, or source project mismatch: stop and ask the user
+  to recheck the supplied MR IID, remotes, and branch/project ownership.
+- GitLab/API/network failure: stop. Do not silently switch protocols or auth
+  methods; use the troubleshooting commands below only if needed.
+
+## Troubleshooting Commands
+
+Run these only after the main invocation fails. Redact tokens in all summaries.
+
+Remote layout:
+
+```bash
+git remote -v
+```
+
+Check HTTP/HTTPS service behavior:
+
+```bash
+curl -I --connect-timeout 8 http://GITLAB_HOST
+curl -I --connect-timeout 8 https://GITLAB_HOST
+```
+
+Project access with the primary token style:
+
+```bash
+curl -sS -X GET -H "PRIVATE-TOKEN: <redacted>" "http://GITLAB_HOST/api/v4/projects/GROUP%2FPROJECT"
+```
+
+MR lookup under the target project:
+
+```bash
+curl -sS -X GET -H "PRIVATE-TOKEN: <redacted>" "http://GITLAB_HOST/api/v4/projects/TARGET_GROUP%2FTARGET_PROJECT/merge_requests/<MR_IID>"
+```
+
+Cross-project MR discovery, for diagnosis only:
+
+```bash
+curl -sS -X GET -H "PRIVATE-TOKEN: <redacted>" "http://GITLAB_HOST/api/v4/merge_requests?source_branch=BRANCH&state=opened&source_project_id=SOURCE_ID&target_project_id=TARGET_ID&per_page=20"
+```
+
+## Default Non-Foreign MR Comment Pipeline
+
+For ordinary MR comment workflows, use a persistent subagent pipeline by default
+when subagents are available:
+
+1. Fetch subagent: run only the strict fetch workflow above and write the JSON
+   artifact under `.agent/tmp/`.
+2. Proposal subagent: inspect the fetched comments against local code and
+   produce modification proposals only. Do not edit code in this phase. Include
+   options, trade-offs, default behavior, and clarification points awaiting
+   human confirmation.
+3. Cross-verification subagent: independently verify the proposal against local
+   code, project patterns, and any relevant docs. Mark each proposal confirmed,
+   qualified, or rejected before the parent agent reports or implements it.
+
+The default behavior after fetching comments is proposal and clarification, not
+implementation. Enter a decision phase with the user after proposals and
+cross-verification are available; present trade-offs, default recommendations,
+and any unresolved questions. Do not edit code, generated source, or project
+configuration to address review comments unless the user explicitly grants
+implementation permission for the specific follow-up.
+
+If subagents are unavailable, decay to the same phases in-session and clearly
+state that the pipeline was executed without separate agents. User instructions
+can override the default pipeline, for example `fetch only`, `extra
+cross-verification`, `skip proposals`, or `edit code after confirmation`.
+
+Review GitLab comments skeptically: do not rush to accept or deny them. Compare
+each comment against local code, behavior, project constraints, and viable
+alternatives before recommending action.
+Clarification artifacts should prefer this compact shape: location, code
+segment, original review comment, agent analysis, options/trade-offs, default
+behavior, and `[ ] Human review:` space.
+
+## Subskill: Foreign MR Code Changes
+
+Use this subskill only when the user explicitly asks to inspect code changes
+from a specific target-project MR whose source project may differ from local
+`origin`.
+
+This subskill fetches MR code diffs for later agent review. It does not fetch or
+interpret review comments. The parent GitLoong comment workflow remains strict
+and unchanged.
+
+### Required Config
+
+Create `foreign_mr_config.json` beside this `SKILL.md`:
+
+```json
+{
+    "gitlab_token": ""
+}
+```
+
+- `gitlab_token`: GitLab token with API read access.
+- No other keys are allowed in this config. In particular, a legacy persisted
+  MR IID is rejected.
+
+### Invocation
+
+```bash
+python3.11 /path/to/gitloong/scripts/fetch_mr_changes.py --mr-iid <user-provided-iid> --output .agent/tmp/gitloong_mr_changes.json
+```
+
+By default the subskill requires the MR target branch to be `main` and fetches
+the latest MR code changes as reported by GitLab. To inspect a user-approved MR
+whose target branch is not `main`, pass `--target-branch ""` or the explicitly
+requested branch name.
+
+### Workflow Contract
+
+1. Obtain the explicit user-provided MR IID and pass it through `--mr-iid`.
+2. Read `foreign_mr_config.json`.
+3. Inspect `git remote` only.
+4. Require exactly two remotes, one named `origin` and one target remote.
+5. Derive the GitLab base URL and target project path from the non-origin
+   remote. Do not guess or override the target project URL.
+6. Fetch the target-project MR identified by `--mr-iid`.
+7. Continue only if the MR exists, is open, and matches the required target
+   branch when one is configured.
+8. Do not require the MR source project to match local `origin`.
+9. Write JSON containing MR metadata, diff refs, changed file metadata, and raw
+   per-file diff text.
+
+Failure handling:
+
+- Missing `foreign_mr_config.json` or token, or a missing/invalid `--mr-iid`:
+  stop and ask the user.
+- Config keys other than `gitlab_token`: stop and ask the user.
+- Remote layout not exactly `origin` plus one target remote: stop and ask the
+  user to confirm the repository setup.
+- MR missing, closed, merged, or target branch mismatch: stop and ask the user
+  to recheck the supplied MR IID, remotes, and target branch intent.
+- GitLab/API/network failure: stop. Do not silently switch protocols or auth
+  methods; use troubleshooting probes only after failure and redact tokens.
+
+### Review Phase
+
+Before reviewing fetched code changes, check the current branch:
+
+```bash
+git branch --show-current
+```
+
+If the current branch is not `main`, terminate the subskill invocation and tell
+the user to switch to `main` and sync with the target remote before trying
+again. Do not inspect or review MR diffs from another branch.
+
+When the branch gate passes, review the fetched diff JSON by spawning subagents.
+The parent agent must orchestrate, assign focused file groups, collect findings,
+and synthesize the final review artifact. Code inspection for fetched MR diffs
+should always be done by subagent spawning to prevent parent-context occupation.
+
+Subagents may inspect the current local codebase for context because the branch
+gate ensures the workspace is on `main`. They must not edit files for review
+phase work.
+
+Preferred review artifact shape:
+
+```markdown
+# Foreign MR Code-Change Review
+
+## MR
+
+- MR: <iid/title/url>
+- Source branch: <source_branch>
+- Target branch: <target_branch>
+- Diff refs: <base/head/start sha>
+
+## Findings
+
+### <short finding title>
+
+- Location: `<path>:<line>` or `<path>:<diff hunk header>` for quick lookup.
+  Always include concrete local line numbers when available. If the finding is
+  only present in the fetched diff and no stable local line exists, include the
+  diff hunk header such as `@@ -10,6 +10,9 @@`.
+- Code segment: `<brief changed code or hunk summary>`
+- MR diff signal: `<what the fetched diff changed>`
+- Agent analysis: `<why this may be risky or why it is acceptable>`
+- Options/trade-offs: `<practical choices>`
+- Default behavior: `<recommended default>`
+- [ ] Human review:
+```
+
+Lead with concrete risks. If no issues are found, say so and mention residual
+risk such as limited runtime coverage, API truncation, or untested paths.
