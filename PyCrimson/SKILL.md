@@ -1,5 +1,5 @@
 ---
-name: pc-pybug
+name: PyCrimson
 description: Review Python code for common, localized, quasi-trivial correctness mistakes in control flow, type and None handling, and strings. Use when the user explicitly requests a quick Python bug scan or common-pitfall check. Do not use for deep semantic or data-flow analysis, architecture, security, performance, syntax, style or linting, or non-Python code.
 ---
 
