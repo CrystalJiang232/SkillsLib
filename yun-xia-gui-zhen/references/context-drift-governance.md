@@ -115,6 +115,22 @@ Designated by the user or derived from constraints. Resolve hook precedence by i
 - [ ] FINAL: File hygiene and cleanup conform to [pre-edit-safety.md](pre-edit-safety.md)
 ```
 
+### 3.1 Missing-Field Log (Missing-Field Protocol activations)
+
+When the Missing-Field Protocol (SKILL.md) activates, record each activation in session state — append to the constraints file or a dedicated `missing-field-log.md` in the session directory:
+
+```markdown
+## Missing-Field Log — Activation <id>
+Field: <name or description>
+Signals: incomplete sentence | invalid JSON/structured payload | missing parameter | out-of-range value
+Status: awaiting | deferred | restored | waived
+Attempts: <N> — one line per round (response summary + still-missing evidence)
+Waiver: none | <exact wording + scope + mode>
+Disclosure: interpreted semantic / suggested missing field / completed semantic (assumed)
+```
+
+Reference this log in every output until the activation is restored or waived. The wait loop's deferral on empty/system-default/timeout responses follows Clarification Channel Governance §A (clarification-protocol.md): mark deferred, halt the round, persist the UNEXECUTED next-round proposal, and await the user.
+
 ### 4. Protection Status Registry (`/tmp/qrh-session/protection-status.md`)
 
 Create and preserve the registry defined in [pre-edit-safety.md](pre-edit-safety.md). Initialize it minimally before task work, then record explicit source approval and protection readiness before any implementation read or task-artifact write.

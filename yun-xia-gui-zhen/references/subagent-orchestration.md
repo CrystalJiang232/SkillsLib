@@ -54,6 +54,8 @@ When a class-grade trigger fires, the orchestration-only constraint (§4 Hard Ru
 | **Continuous user interaction** | Subagents lack direct user access; mid-flight clarification is impossible | Any task likely to require user feedback before completion |
 | **Tightly coupled / sequential dependencies** | Each step depends on the previous one's output; parallelism gains are illusory and handoff costs dominate | Multi-stage refactors where stage N edits what stage N-1 produced. **Exception**: a large single-artifact edit/write task delegates via Chunked Sequential Edit (§5 Pattern F) — sequential, not parallel |
 
+The Missing-Field Protocol wait loop (missing-field-protocol.md) is inherently continuous-user-interaction: the halt and the field request stay in the main session and are never delegated.
+
 ### Protected Source-Candidate Comparison
 
 Use [pre-edit-safety.md](pre-edit-safety.md) as the sole owner of comparison definitions, candidate selection, Mode A fallback, and detailed pre-edit procedure.
@@ -165,6 +167,7 @@ Before returning, the subagent confirms its report includes a 3-item checklist:
 - **Clean workspace**: Intermediate work products stay in the OS-temp session directory (per context-drift-governance.md, File Hygiene); only deliverables return to main agent
 - **No overlapping or rival mandates**: If multiple subagents are given related tasks, their mandates must have non-overlapping scopes. Never pit subagents against each other to "see who does better"
 - **Protection inheritance**: Every writable-worker mandate carries the current protection-status record defined by [pre-edit-safety.md](pre-edit-safety.md). The worker reads and validates that record before touching task material; missing, unresolved, or stale protection state returns `BLOCKED` without a write.
+- **Mandate integrity**: every mandate contains complete fields. A subagent that receives a truncated or field-missing mandate applies the Missing-Field Protocol (missing-field-protocol.md): halt, report `NEEDS_CONTEXT` (or the mandated `BLOCKED` status), and never guess the missing content.
 
 ---
 

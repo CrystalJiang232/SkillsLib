@@ -8,8 +8,9 @@ description: >
   for complex tasks, when maintaining session consistency, or when governing
   workspace/source authority and pre-edit Git or backup safety. Triggers on:
   software development, analysis, multi-step workflows, research, prompt or skill
-  engineering, ambiguous requirements, backup-control directions, and an
-  intentional `terminates session` request to clean registered session backups.
+  engineering, ambiguous requirements, stripped or truncated instructions or
+  missing required fields, backup-control directions, and an intentional
+  `terminates session` request to clean registered session backups.
   Apply this skill to clarify before execution, preserve visible state, verify
   claims and outputs, and orchestrate subagents where applicable.
 ---
@@ -18,13 +19,13 @@ description: >
 
 > Core philosophy: *Defer to clarify. Verify to trust. Structure to persist.*
 
-This skill governs agent behavior through four core protocols, one conditional protocol, and five prompt engineering patterns. Apply them based on task characteristics.
+This skill governs agent behavior through five core protocols, one conditional protocol, and five prompt engineering patterns. Apply them based on task characteristics.
 
 ## Skill Entry Point — Protocol Eligibility
 
-Apply the Instruction Precedence and Explicit User Overrides principle below before interpreting any skill rule. Then determine which mode applies:
+Apply the Instruction Precedence and Explicit User Overrides principle below before interpreting any skill rule. Then run the mandatory instruction-integrity screen: scan the incoming user/system message for strip signals — incomplete words or sentences, invalid JSON or structurally broken payloads, missing required parameters, or parameter values far outside any valid range. If a required field is missing or its conveyed meaning is unrecoverable, enter the **Missing-Field Protocol** immediately and do not proceed to mode selection or any other protocol until the field is restored or an explicit waiver applies. Then determine which mode applies:
 
-**Mode A — Single-Agent (Default)**: If subagent spawning is unavailable or the user has explicitly forbidden it, apply the four core protocols and five prompt patterns without orchestration. If protected source-authority resolution would require code-level comparison, halt by default and request the user's source selection or subagent availability; perform only a bounded inline comparison that an explicit scoped user direction permits.
+**Mode A — Single-Agent (Default)**: If subagent spawning is unavailable or the user has explicitly forbidden it, apply the five core protocols and five prompt patterns without orchestration. If protected source-authority resolution would require code-level comparison, halt by default and request the user's source selection or subagent availability; perform only a bounded inline comparison that an explicit scoped user direction permits.
 
 **Mode B — Subagent Orchestration**: If subagent spawning is available and not forbidden, apply the Subagent Orchestration Protocol alongside the core protocols. Read [references/subagent-orchestration.md](references/subagent-orchestration.md) before delegating. Delegate protected code-level source comparison even when it would otherwise appear trivial.
 
@@ -42,7 +43,8 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 | :---------------------------------------------------------: | :----------------------------: | :----------------------: |
 | Working directory absent, relative, or has multiple matches |   **Pre-Edit Safety Gate**     | Clarification Protocol  |
 |          Project files are about to be modified             |   **Pre-Edit Safety Gate**     | Context Drift Governance |
-|       Requirements unclear, ambiguous, or incomplete        |   **Clarification Protocol**   | Context Drift Governance |
+|   Requirements unclear or ambiguous (prompt intact)          |   **Clarification Protocol**   | Context Drift Governance |
+|   Instruction stripped/truncated or a required field missing | **Missing-Field Protocol**     | Clarification Protocol (after field restored) |
 |   External facts, technical claims, or references needed    |   **Reference Verification**   |  Clarification Protocol  |
 |            Multi-step complex task (3+ actions)             |  **Context Drift Governance**  |  Clarification Protocol  |
 |                Starting ANY non-trivial task                |  **Context Drift Governance**  |  Apply others as needed  |
@@ -58,7 +60,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 **Instruction Precedence and Explicit User Overrides** — Apply higher-priority system, developer, host, workspace, project, safety, and permission constraints before this skill. Within the remaining permitted scope, follow explicit current user directions over this skill's defaults, recommendations, output formats, and optional workflows; a later same-priority direction wins for the same scope. Never infer an override from silence, a timeout, an empty/default response, or broad permission. Record the exact scope, affected default, and any risk-bearing waiver in session state.
 
-1. **No Premature Execution** — Never generate code, modify files, or execute tasks before requirements are explicit. When in doubt, clarify first. Complexity scales on demand: apply the simplest protocol set sufficient for the task ("find the simplest solution possible"), consistent with applying protocols based on task characteristics.
+1. **No Premature Execution** — Never generate code, modify files, or execute tasks before requirements are explicit. When in doubt, clarify first. Complexity scales on demand: apply the simplest protocol set sufficient for the task ("find the simplest solution possible"), consistent with applying protocols based on task characteristics. Screen every incoming instruction for strip signals before interpreting it; never infer the content of a stripped or truncated field (see Missing-Field Protocol).
 
 2. **Visible State** — All actions must be observable in-session. No hidden reasoning or invisible decisions. Explicitly show constraint reading, task selection, acquisition, generation, and verification.
 
@@ -72,7 +74,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 6. **RTCF Structuring** — Before engaging with any task, internally decompose the user's intent through the RTCF lens: Role (who), Task (what), Context (background), Format (output expectation). Even when not explicitly outputting the RTCF structure, use it to ensure completeness of understanding.
 
-7. **Prefer Interactive Clarification Over Autonomous Resolution** — Unless an explicit current user direction resolves the point or waives clarification within scope, present ambiguity and conflicting subagent outputs to the user rather than choosing autonomously.
+7. **Prefer Interactive Clarification Over Autonomous Resolution** — Unless an explicit current user direction resolves the point or waives clarification within scope, present ambiguity and conflicting subagent outputs to the user rather than choosing autonomously. Under the Missing-Field Protocol this becomes a plain request for the missing field — no options, no recommended default, no guessing — until valid semantics arrive or an explicit waiver applies.
 
 8. **Clarification Channel Discipline** — Treat an empty, system-default, or timeout response as deferred, never approved. Halt the round, persist decisions and an unexecuted next-round proposal, and await the user. Do not ask how to perform forbidden or unpermitted work. Follow the user's explicit channel preference within the precedence rule above. Read [references/clarification-protocol.md](references/clarification-protocol.md), "Clarification Channel Governance."
 
@@ -150,9 +152,22 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 5. **Package** — Run `package_skill.py`
 6. **Iterate** — Refine based on usage
 
+#### 5. Missing-Field Protocol (Instruction Integrity)
+
+**When**: An incoming user or system instruction shows strip signals — incomplete words or sentences, invalid JSON or structurally broken payloads, missing required parameters, or parameter values far outside any valid range — and the conveyed meaning is semantically incomplete. Natural-language typos, misspellings, and grammar errors do NOT activate this protocol.
+
+**Process**: Read [references/missing-field-protocol.md](references/missing-field-protocol.md)
+
+**Summary**:
+- Halt all work immediately; do not infer, guess, or complete the missing field
+- Do NOT run the Clarification Protocol for the missing field: no options, no plan briefs, no recommended default — state plainly which field(s) are missing/invalid and request their completion
+- Wait loop: re-screen the identical field after every response; keep prompting while the semantics remain missing; an empty/system-default/timeout response defers the round and persists state (Clarification Channel Governance §A)
+- Waiver branch (only when the user pre-initiated no-interrupt mode or explicitly says the absence is normal): disclose (a) the semantic interpreted as user intent, (b) the field suggested missing, and (c) the missing semantic completed via most-likelihood deduction, marked assumed, before proceeding
+- Once the field is restored, any remaining genuine ambiguity returns to the standard Clarification Protocol
+
 ### Conditional Protocol
 
-#### 5. Subagent Orchestration Protocol (REQUIRED when Mode B)
+#### 6. Subagent Orchestration Protocol (REQUIRED when Mode B)
 
 **When**: Agent has confirmed subagent spawning capability, user has not forbidden it, AND the task satisfies any condition in the Decision Matrix (result-oriented, context/token-consuming, or parallel and time-consuming).
 
@@ -205,3 +220,7 @@ Apply these patterns to enhance prompt quality and response reliability:
 - Subagent Orchestration remaps CTAGV phases from single-agent execution to supervisor-orchestrated delegation
 - Resolve protocol conflicts by instruction priority, then specificity and the later same-priority direction for the same scope; do not use a generic "stricter wins" shortcut
 - Treat a tie-breaker's confidence-qualified conclusion as evidence, not adoption authority: adopt autonomously only when objectively verified and explicitly preapproved by the user; otherwise present the conflict, conclusion, and evidence and await user selection
+- Missing-Field Protocol takes precedence over Clarification Protocol for a stripped/truncated field; once the field is restored, remaining genuine ambiguity returns to Clarification
+- Missing-Field Protocol inherits Clarification Channel Governance §A: empty/default/timeout responses defer and halt the round; silence is never a waiver
+- The Missing-Field waiver completes semantics only; it does not waive source approval, dirty-state acceptance, or backup decisions (pre-edit-safety.md)
+- In Mode B, mandates must contain complete fields; a subagent receiving a truncated or field-missing mandate reports `NEEDS_CONTEXT`/`BLOCKED` and never guesses, and the missing-field wait loop stays in the main session

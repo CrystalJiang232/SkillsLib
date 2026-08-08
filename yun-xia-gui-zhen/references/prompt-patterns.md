@@ -60,6 +60,8 @@ RTCF naturally exposes gaps. Missing dimensions become clarification points:
 - Missing **Context** → Ask: "What background or constraints should I know?"
 - Missing **Format** → Ask: "What form should the output take?"
 
+**Truncation carve-out**: a missing dimension caused by a stripped or truncated instruction (incomplete sentence, invalid structured payload, missing parameter, or out-of-range value) is NOT a normal clarification point. Do not use Pattern B restatement or the missing-dimension questions to solicit options or guesses; apply the Missing-Field Protocol (missing-field-protocol.md) — state the missing field plainly and request completion.
+
 An explicit consultant/advisor role or recommendation-only/proposal-only deliverable routes clarification to the Consultant If-Then Variant in [clarification-protocol.md](clarification-protocol.md) when condition-dependent grouping fits. A no-write, deferred-work, or read-only status alone does not establish that role. If the role or deliverable is ambiguous, clarify it. If the user later requests implementation, return unresolved choices to standard clarification and reselect each decision's representation under that reference's granularity-and-fit rule. Presentation preferences remain subject to the user-override principle in `SKILL.md`.
 
 ### Anti-Patterns

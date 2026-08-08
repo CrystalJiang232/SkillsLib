@@ -15,6 +15,8 @@ Activate when ANY of these conditions are met:
 - Output format, target environment, or constraints are unspecified
 - User says "do what you think is best" without prior established patterns
 
+**Carve-out — Missing-Field Protocol**: when the instruction's conveyance is damaged (stripped/truncated message, invalid structured payload, missing parameter, or a parameter far outside any valid range), the missing field is NOT a clarification point under this protocol. Do not offer options, representations, plan briefs, or a recommended default for it; apply the Missing-Field Protocol (missing-field-protocol.md): plain field request, wait loop, waiver branch.
+
 ## Clarification Loop
 
 ### Phase 1: Suspend and Analyze
@@ -30,6 +32,8 @@ Activate when ANY of these conditions are met:
 ### Phase 2: Raise Questions
 
 For each ambiguity point, make the decision substance explicit, then select the preview representation from the decision's granularity and communicative fit. Whether the surrounding task contains code does not select the representation.
+
+This phase does not apply to a field governed by the Missing-Field Protocol (missing-field-protocol.md); that protocol's plain field request replaces options, representations, and defaults.
 
 ### Required Decision Substance
 
