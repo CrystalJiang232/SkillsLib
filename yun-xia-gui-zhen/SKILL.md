@@ -94,6 +94,13 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - Retain registered backups and their location-status file after ordinary cleanup; always report retained backup locations on success or failure
 - Treat an intentional `terminates session` directive as authority to clean only exact backups registered by the active session; preserve and update the location-status file
 - On an unrecoverable failure, halt and report recovery information; do not automatically roll back
+- **Write-time CAS guard**: before each new edit group, re-hash any file this
+  session already wrote; mismatch ⇒ re-read (whole file < 100 KB, targeted
+  section otherwise; escalate for core files) before editing. Prefer scoped
+  Edit over Write; global substitution only after a full re-read. An edit-tool
+  failure for a non-system reason ⇒ suspected race ⇒ overhaul-read before the
+  next write; never silently overwrite or auto-merge. Details:
+  [references/edit-cas-gate.md](references/edit-cas-gate.md)
 
 ### Core Protocols
 

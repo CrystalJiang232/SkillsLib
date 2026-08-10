@@ -237,6 +237,8 @@ Last validated: [time/checkpoint]
   After-state: [hash/mtime]
 ```
 
+Maintain a session CAS register (edit-cas-gate.md) as the active pre-write baseline; these Before/After fields are its audit trail.
+
 Never erase prior status entries to make the current state appear clean. Append or update status and preserve the evidence trail across retries, handoffs, cleanup, and terminal failure.
 
 ## Mode A and Mode B Enforcement
@@ -249,7 +251,7 @@ In Mode B, the supervisor completes or explicitly assigns only metadata prefligh
 
 If write intent appears during `ready_read`, stop before the first write, set the gate back to `pending`, classify the repository, and complete the normal protection decision. Source approval may be reused only while its exact path and scope remain valid; `ready_read` itself contributes no backup waiver, dirty-state acceptance, or writable readiness.
 
-Before a sequential chunk write, validate both the Protection Status Registry and the Artifact State Log. A mismatch, external change, stale hash, source change, or scope expansion invalidates the affected readiness and returns to Acquire/protection.
+Before a sequential chunk write, validate both the Protection Status Registry and the Artifact State Log. A mismatch, external change, stale hash, source change, or scope expansion invalidates the affected readiness and returns to Acquire/protection. Apply the general write-time CAS gate (edit-cas-gate.md) to non-chunked writes as well.
 
 ## Failure and Rollback
 
