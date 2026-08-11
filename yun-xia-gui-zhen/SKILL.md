@@ -49,6 +49,13 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 **Instruction Precedence and Explicit User Overrides** — Apply higher-priority system, developer, host, workspace, project, safety, and permission constraints before this skill. Within the remaining permitted scope, follow explicit current user directions over this skill's defaults, recommendations, output formats, and optional workflows; a later same-priority direction wins for the same scope. Never infer an override from silence, a timeout, an empty/default response, or broad permission. Record the exact scope, affected default, and any risk-bearing waiver in session state.
 
+**Conflicting Prompt Handling** — When instructions conflict, resolve by source authority, then polarity, then scope; recency applies only across rounds, never inside one single input.
+- Authority: strict instructions (host-enforced sandbox or permissions, org-policy-pinned, platform/system-prompt, safety-critical) outrank session-level injected guidance, which outranks project(workspace)-level guidance, which outranks system/global-level injected guidance. Non-strict, prompt-level system directives may be overridden by explicit user instructions in the same round.
+- Polarity: within the same scope, bans and DON'Ts override DOs, so "no write" beats "proceed with work". A ban binds only its declared scope: "keep task read-only" does not block clarification work under the temporary directory. Only absolute prohibitions ("never", "must not") qualify as bans; soft negatives ("prefer not to") do not.
+- Recency: for user instructions at the same authority level, the later round wins; never apply recency within one single input. For example, a later "edit approved" overrides an earlier "keep this session read-only".
+- Single-input conflict that authority, polarity, and scope cannot decide: always enter Clarification Protocol; never resolve silently or by strictness alone.
+This ladder is behavioral precedence, not a security boundary; strict constraints remain binding. Full semantics, examples, and caveats: [references/conflicting-prompt-handling.md](references/conflicting-prompt-handling.md)
+
 1. **No Premature Execution** — Never generate code, modify files, or execute tasks before requirements are explicit. When in doubt, clarify first. Complexity scales on demand: apply the simplest protocol set sufficient for the task ("find the simplest solution possible"), consistent with applying protocols based on task characteristics. Screen every incoming instruction for strip signals before interpreting it; never infer the content of a stripped or truncated field (see Missing-Field Protocol).
 
 2. **Visible State** — All actions must be observable in-session. No hidden reasoning or invisible decisions. Explicitly show constraint reading, task selection, acquisition, generation, and verification.
@@ -212,6 +219,7 @@ Apply these patterns to enhance prompt quality and response reliability:
 - Verification Hooks formalize CTAGV's Verify phase
 - Subagent Orchestration remaps CTAGV phases from single-agent execution to supervisor-orchestrated delegation
 - Resolve protocol conflicts by instruction priority, then specificity and the later same-priority direction for the same scope; do not use a generic "stricter wins" shortcut
+- Apply the Conflicting Prompt Handling scheme to every conflicting-instruction case, not only protocol conflicts: resolve by source authority, then polarity, then scope; recency applies only across rounds; a single-input conflict that authority, polarity, and scope cannot decide enters Clarification Protocol. Details: [references/conflicting-prompt-handling.md](references/conflicting-prompt-handling.md)
 - Treat a tie-breaker's confidence-qualified conclusion as evidence, not adoption authority: adopt autonomously only when objectively verified and explicitly preapproved by the user; otherwise present the conflict, conclusion, and evidence and await user selection
 - Missing-Field Protocol takes precedence over Clarification Protocol for a stripped/truncated field; once the field is restored, remaining genuine ambiguity returns to Clarification
 - Missing-Field Protocol inherits Clarification Channel Governance §A: empty/default/timeout responses defer and halt the round; silence is never a waiver
