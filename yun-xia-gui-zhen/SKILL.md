@@ -1,18 +1,7 @@
 ---
 name: yun-xia-gui-zhen
 description: >
-  Quick Reference Handbook (QRH) for AI agent prompt engineering governance.
-  Provides structured protocols to ensure high-quality, reliable agent behavior
-  across tasks. Use when starting ANY non-trivial task, when facing ambiguous
-  requirements, when external verification is needed, when structuring prompts
-  for complex tasks, when maintaining session consistency, or when governing
-  workspace/source authority and pre-edit Git or backup safety. Triggers on:
-  software development, analysis, multi-step workflows, research, prompt or skill
-  engineering, ambiguous requirements, stripped or truncated instructions or
-  missing required fields, backup-control directions, and an intentional
-  `terminates session` request to clean registered session backups.
-  Apply this skill to clarify before execution, preserve visible state, verify
-  claims and outputs, and orchestrate subagents where applicable.
+  Quick Reference Handbook (QRH) for AI agent prompt engineering governance. Provides structured protocols to ensure high-quality, reliable agent behavior across tasks. Use when starting ANY non-trivial task, when facing ambiguous requirements, when external verification is needed, when structuring prompts for complex tasks, when maintaining session consistency, or when governing workspace/source authority and pre-edit Git or backup safety. Triggers on: software development, analysis, multi-step workflows, research, prompt or skill engineering, ambiguous requirements, stripped or truncated instructions or missing required fields, backup-control directions, and an intentional `terminates session` request to clean registered session backups. Apply this skill to clarify before execution, preserve visible state, verify claims and outputs, and orchestrate subagents where applicable.
 ---
 
 # 云霞归真 — QRH Governance Handbook
@@ -66,7 +55,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 
 3. **Loop Until Done** — Clarification is iterative. One round is rarely sufficient. Repeat the clarification cycle until zero pending items remain.
 
-4. **Subagent Discipline** — When verification is needed, use explorer subagents pre-clarification and supervisor subagents post-clarification. Never skip verification for P0 constraints.
+4. **Subagent Discipline** — When verification is needed, use explorer subagents pre-clarification and supervisor subagents post-clarification. Never skip verification for P0 constraints. For cross-verification, pair White-Verifier and Black-Verifier profiles (subagent-orchestration.md, Black-and-White Verification) to cover expected and unexpected flaw ranges.
 
 4a. **Orchestration-Only Main Session (Mode B)** — For a class-grade trigger, confine the main session to orchestration and governance state. Delegate task-artifact exploration, generation, and verification unless an explicit scoped user direction permits main-session work, the bounded conflict-inspection exemption applies, or an emergency takeover is announced. Follow [references/subagent-orchestration.md](references/subagent-orchestration.md) for the exact boundaries.
 
@@ -77,6 +66,8 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 7. **Prefer Interactive Clarification Over Autonomous Resolution** — Unless an explicit current user direction resolves the point or waives clarification within scope, present ambiguity and conflicting subagent outputs to the user rather than choosing autonomously. Under the Missing-Field Protocol this becomes a plain request for the missing field — no options, no recommended default, no guessing — until valid semantics arrive or an explicit waiver applies.
 
 8. **Clarification Channel Discipline** — Treat an empty, system-default, or timeout response as deferred, never approved. Halt the round, persist decisions and an unexecuted next-round proposal, and await the user. Do not ask how to perform forbidden or unpermitted work. Follow the user's explicit channel preference within the precedence rule above. Read [references/clarification-protocol.md](references/clarification-protocol.md), "Clarification Channel Governance."
+
+**One-Line Sentences** — Never split a sentence across lines; keep each sentence on one line regardless of total length.
 
 ## Protocol Details
 
@@ -94,13 +85,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - Retain registered backups and their location-status file after ordinary cleanup; always report retained backup locations on success or failure
 - Treat an intentional `terminates session` directive as authority to clean only exact backups registered by the active session; preserve and update the location-status file
 - On an unrecoverable failure, halt and report recovery information; do not automatically roll back
-- **Write-time CAS guard**: before each new edit group, re-hash any file this
-  session already wrote; mismatch ⇒ re-read (whole file < 100 KB, targeted
-  section otherwise; escalate for core files) before editing. Prefer scoped
-  Edit over Write; global substitution only after a full re-read. An edit-tool
-  failure for a non-system reason ⇒ suspected race ⇒ overhaul-read before the
-  next write; never silently overwrite or auto-merge. Details:
-  [references/edit-cas-gate.md](references/edit-cas-gate.md)
+- **Write-time CAS guard**: before each new edit group, re-hash any file this session already wrote; mismatch ⇒ re-read (whole file < 100 KB, targeted section otherwise; escalate for core files) before editing. Prefer scoped Edit over Write; global substitution only after a full re-read. An edit-tool failure for a non-system reason ⇒ suspected race ⇒ overhaul-read before the next write; never silently overwrite or auto-merge. Details: [references/edit-cas-gate.md](references/edit-cas-gate.md)
 
 ### Core Protocols
 
@@ -194,6 +179,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - The reference file additionally provides coordination and failure-governance rules: bounded verification retries, progress ledger, explicit termination, and escalation to the user
 - Concurrency scales with task effort: default 1 agent (inline); comparison tasks warrant 2–4 subagents; large genuinely-parallel research tasks may reach 5–7 (extreme research 10+, requiring a human plan-review gate) — 5–7 is a conditional ceiling, not a recommendation
 - All other core protocols still apply; subagent orchestration extends them
+- Cross-verification uses dual profiles — White (full intent + flaw hints) and Black (artifact + scope only) — per Black-and-White Verification in [subagent-orchestration.md](references/subagent-orchestration.md); black finalizes before seeing white's report
 
 ### Prompt Engineering Patterns
 
