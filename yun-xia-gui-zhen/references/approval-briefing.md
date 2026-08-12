@@ -34,6 +34,64 @@ TARGET_FILE="${TARGET_DIR}/<name>"
 Approve — Deny
 ```
 
+## Few-Shot Anchoring — Good vs Bad Commands
+
+Use these contrast pairs to anchor briefing generation: the good side declares named variables at the top, uses one logical step per line, and references variables instead of literals; the bad side packs inline literal paths into opaque one-liners. These pairs are illustrative reference material, not executable requests.
+
+Pair 1 — cleaning a build directory:
+
+BAD (magic strings, one-liner, hard to review):
+
+```bash
+rm -rf /home/hibiscus/git_repos/SkillLib/tmp/build && rm -rf /tmp/qrh-session-cache
+```
+
+GOOD (named targets, one step per line):
+
+```bash
+PROJECT_ROOT="/home/hibiscus/git_repos/SkillLib"
+BUILD_DIR="${PROJECT_ROOT}/tmp/build"
+CACHE_DIR="/tmp/qrh-session-cache"
+rm -rf "${BUILD_DIR}"
+rm -rf "${CACHE_DIR}"
+```
+
+Pair 2 — copying a log file into workspace temp:
+
+BAD (repeated literal paths, chained one-liner):
+
+```bash
+cp /tmp/qrh-session-approval-fatigue/log.txt /home/hibiscus/git_repos/SkillLib/tmp/ && echo "copied"
+```
+
+GOOD (named targets, one step per line):
+
+```bash
+STATE_DIR="/tmp/qrh-session-approval-fatigue"
+LOG_FILE="${STATE_DIR}/log.txt"
+WORKSPACE_TMP="/home/hibiscus/git_repos/SkillLib/tmp"
+cp "${LOG_FILE}" "${WORKSPACE_TMP}/"
+echo "copied"
+```
+
+Pair 3 — running a test suite in a target project:
+
+BAD (literal path repeated, chained one-liner):
+
+```bash
+cd /var/lib/jenkins/workspace/project-a && pytest /var/lib/jenkins/workspace/project-a/tests -k integration
+```
+
+GOOD (named targets, one step per line):
+
+```bash
+PROJECT_DIR="/var/lib/jenkins/workspace/project-a"
+cd "${PROJECT_DIR}"
+pytest "${PROJECT_DIR}/tests" -k integration
+```
+
+Contrast notes: literal paths repeated across a line and across commands make typos and copy-paste drift invisible; opaque one-liners hide arguments and intermediate commands between operators; the good side's variables make each target's role visible and reviewable, matching the named-targets rule.
+
 ## M2 — Fatigue Detection (Attention Checks)
 
 **Trigger**: after every 12-20 user-facing approval requests, emit one labeled attention check; the interval is random uniform within that range. Only user-facing approval requests count toward the interval.
