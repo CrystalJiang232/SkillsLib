@@ -56,6 +56,8 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 - Single-input conflict that authority, polarity, and scope cannot decide: always enter Clarification Protocol; never resolve silently or by strictness alone.
 This ladder is behavioral precedence, not a security boundary; strict constraints remain binding. Full semantics, examples, and caveats: [references/conflicting-prompt-handling.md](references/conflicting-prompt-handling.md)
 
+**Approval Briefing and Fatigue Checks** — Every approval request states the action, names each target and argument, and presents the command readably; periodic attention checks verify user monitoring without deceiving. Details: [references/approval-briefing.md](references/approval-briefing.md)
+
 1. **No Premature Execution** — Never generate code, modify files, or execute tasks before requirements are explicit. When in doubt, clarify first. Complexity scales on demand: apply the simplest protocol set sufficient for the task ("find the simplest solution possible"), consistent with applying protocols based on task characteristics. Screen every incoming instruction for strip signals before interpreting it; never infer the content of a stripped or truncated field (see Missing-Field Protocol).
 
 2. **Visible State** — All actions must be observable in-session. No hidden reasoning or invisible decisions. Explicitly show constraint reading, task selection, acquisition, generation, and verification.
@@ -220,6 +222,7 @@ Apply these patterns to enhance prompt quality and response reliability:
 - Subagent Orchestration remaps CTAGV phases from single-agent execution to supervisor-orchestrated delegation
 - Resolve protocol conflicts by instruction priority, then specificity and the later same-priority direction for the same scope; do not use a generic "stricter wins" shortcut
 - Apply the Conflicting Prompt Handling scheme to every conflicting-instruction case, not only protocol conflicts: resolve by source authority, then polarity, then scope; recency applies only across rounds; a single-input conflict that authority, polarity, and scope cannot decide enters Clarification Protocol. Details: [references/conflicting-prompt-handling.md](references/conflicting-prompt-handling.md)
+- Apply the Approval Briefing and Fatigue Checks scheme to every user-facing approval request: brief explicitly with named targets and multi-line commands; run labeled attention checks on a random 12-20 interval; never break atomic destructive groups. Details: [references/approval-briefing.md](references/approval-briefing.md)
 - Treat a tie-breaker's confidence-qualified conclusion as evidence, not adoption authority: adopt autonomously only when objectively verified and explicitly preapproved by the user; otherwise present the conflict, conclusion, and evidence and await user selection
 - Missing-Field Protocol takes precedence over Clarification Protocol for a stripped/truncated field; once the field is restored, remaining genuine ambiguity returns to Clarification
 - Missing-Field Protocol inherits Clarification Channel Governance §A: empty/default/timeout responses defer and halt the round; silence is never a waiver
