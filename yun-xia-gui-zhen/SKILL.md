@@ -8,13 +8,13 @@ description: >
 
 > Core philosophy: *Defer to clarify. Verify to trust. Structure to persist.*
 
-This skill governs agent behavior through six core protocols, one conditional protocol, and five prompt engineering patterns. Apply them based on task characteristics.
+This skill governs agent behavior through seven core protocols, one conditional protocol, and five prompt engineering patterns. Apply them based on task characteristics.
 
 ## Skill Entry Point — Protocol Eligibility
 
 Apply the Instruction Precedence and Explicit User Overrides principle below before interpreting any skill rule. Then run the mandatory instruction-integrity screen: scan the incoming user/system message for strip signals — incomplete words or sentences, invalid JSON or structurally broken payloads, missing required parameters, or parameter values far outside any valid range. If a required field is missing or its conveyed meaning is unrecoverable, enter the **Missing-Field Protocol** immediately and do not proceed to mode selection or any other protocol until the field is restored or an explicit waiver applies. Then determine which mode applies:
 
-**Mode A — Single-Agent (Default)**: If subagent spawning is unavailable or the user has explicitly forbidden it, apply the six core protocols and five prompt patterns without orchestration. If protected source-authority resolution would require code-level comparison, halt by default and request the user's source selection or subagent availability; perform only a bounded inline comparison that an explicit scoped user direction permits.
+**Mode A — Single-Agent (Default)**: If subagent spawning is unavailable or the user has explicitly forbidden it, apply the seven core protocols and five prompt patterns without orchestration. If protected source-authority resolution would require code-level comparison, halt by default and request the user's source selection or subagent availability; perform only a bounded inline comparison that an explicit scoped user direction permits.
 
 **Mode B — Subagent Orchestration**: If subagent spawning is available and not forbidden, run the mandatory Inter-Agent Communication capability self-check (FULL / PARTIAL / NONE; an explicit user direction forbidding spawning applies NONE directly), then apply the Subagent Orchestration Protocol alongside the core protocols. Read [references/subagent-orchestration.md](references/subagent-orchestration.md) and [references/inter-agent-communication.md](references/inter-agent-communication.md) before delegating. Delegate protected code-level source comparison even when it would otherwise appear trivial.
 
@@ -42,6 +42,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 |            Multi-step complex task (3+ actions)             |  **Context Drift Governance**  |  Clarification Protocol  |
 |                Starting ANY non-trivial task                |  **Context Drift Governance**  |  Apply others as needed  |
 |              Any interrupt or halt/stop/wait steering       | **Interrupt Recovery Protocol** |  Clarification Protocol  |
+|    User asks to elaborate/explain or requests quick answer  |         **Quick Ask Mode**      |     Clarification Protocol |
 |          User provides skill/creator instructions           |     **QRH Generator Mode**     |      All protocols       |
 | Agent can spawn subagents, task benefits from parallel work |   **Subagent Orchestration**   | Context Drift Governance |
 |             Need to structure a complex prompt              |       **RTCF Template**        |    Chain-of-Reasoning    |
@@ -78,6 +79,8 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 4b. **Convergence (Explorer–Worker–Verifier)** — Main session owns the body; subagents run pre/post only. See Pattern G.
 
 4c. **Interrupt Recovery (mandatory)** — On any interrupt, do not assume the reason; re-read session history and inspect workspace status before reasoning. Later steering or rejection messages override earlier instructions. Follow [references/interrupt-recovery.md](references/interrupt-recovery.md).
+
+9. **Quick Ask Mode** — On a narrow elaboration, explanation, quick-answer, or post-work report request that passes the mandatory semantic check, do not edit workspace files, do not spawn subagents, and answer from main-session context only. Prefer no status-file writes. If the answer is uncertain, state the caveat; if unavailable, ask permission for external search. Prefer normal-task interpretation when the request is ambiguous between research and quick ask.
 
 5. **File-Based State** — Session memory is unreliable. A file of several hundred bytes is worth a context window of a trillion tokens. Persist state (constraints, TODOs, verification hooks) to files.
 
@@ -192,9 +195,23 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 - Report what was done and which phase was abandoned; offer practical options without apologies.
 - Treat user-provided rejection reasons as highest-priority instructions; halt on too-large deviations.
 
+#### 7. Quick Ask Mode
+
+**When**: The user asks for a narrow elaboration, explanation, quick answer, or post-work report, and a semantic check confirms quick ask rather than normal research.
+
+**Process**: Apply the rules below inline; no reference file is loaded.
+
+**Summary**:
+- Do not edit workspace files, spawn subagents, or auto-fetch external sources.
+- Answer from main-session context only.
+- Prefer no status-file writes.
+- Keep reasoning compact and scoped to the exact question.
+- If uncertain, state the caveat; if unavailable, request permission for external search.
+- If ambiguous, give a compact option-style clarification.
+
 ### Conditional Protocol
 
-#### 7. Subagent Orchestration Protocol (REQUIRED when Mode B)
+#### 8. Subagent Orchestration Protocol (REQUIRED when Mode B)
 
 **When**: Agent has confirmed subagent spawning capability, user has not forbidden it, AND the task satisfies any condition in the Decision Matrix (result-oriented, context/token-consuming, or parallel and time-consuming).
 
