@@ -1,5 +1,16 @@
 # RAG (Retrieval-Augmented Generation) Pattern
 
+## Table of Contents
+
+- Overview
+- When to Activate
+- The RAG Workflow
+- Retrieved Context
+- Synthesis
+- RAG vs. Reference Verification
+- Failure Modes and Handling
+- Anti-Patterns
+
 ## Overview
 
 RAG grounds AI-generated content in externally retrieved information rather than relying solely on internal knowledge. Use this pattern when technical accuracy, factual correctness, or up-to-date information is critical.
