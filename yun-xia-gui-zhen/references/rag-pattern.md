@@ -57,6 +57,10 @@ Queries:
 
 ### Phase 2: Source Retrieval
 
+Establish Source Authority before retrieval: check workspace files, then system-scope files, then web search results only when the user has broadly authorized web search. Search system-scope files with `find` or `rg`; never assume a package path. On multiple system candidates, stop and ask which one is used unless the compiler/interpreter/library is explicitly declared.
+
+Record provenance and version anchors for any retrieved source that affects output: `Scope`, `Location`, `Version`, `Retrieved`. Mark `Version` as `unverified` when it cannot be established. When local/system and web versions conflict, surface the mismatch and ask.
+
 Execute searches and collect candidate sources. Apply the source hierarchy from Reference Verification Protocol:
 
 1. **Primary sources first**: Official docs, source code, RFCs

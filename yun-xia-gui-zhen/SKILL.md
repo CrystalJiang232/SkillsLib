@@ -127,10 +127,12 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 **Process**: Read [references/reference-verification.md](references/reference-verification.md)
 
 **Summary**:
-- Search online for at least two cross-referencing sources per perspective
-- Do not rely solely on training data
-- Attach visitable links for all claims
-- Drop unverifiable content
+- Source Authority: workspace files > system-scope files > web_search results; workspace search is default-granted, web_search is default-denied unless the user broadly authorizes it.
+- Search system-scope files with `find` or `rg`; on multiple candidates, stop and ask which is used unless the compiler/interpreter/library is explicitly declared.
+- When web is authorized, cross-reference at least two independent sources per perspective.
+- Do not rely solely on training data; attach visitable links and drop unverifiable content.
+- Record provenance and version anchors (`scope`, `location`, `version`, `retrieved`) for claims that affect output; mark version `unverified` when unknown.
+- Subagents inherit this rule and may web-search only when the parent mandate explicitly authorizes it.
 
 #### 3. Context Drift Governance
 
