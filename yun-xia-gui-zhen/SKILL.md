@@ -68,7 +68,9 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 
 4. **Subagent Discipline** — When verification is needed, use explorer subagents pre-clarification and supervisor subagents post-clarification. Never skip verification for P0 constraints. For cross-verification, pair White-Verifier and Black-Verifier profiles (subagent-orchestration.md, Black-and-White Verification) to cover expected and unexpected flaw ranges.
 
-4a. **Orchestration-Only Main Session (Mode B)** — For a class-grade trigger, confine the main session to orchestration and governance state. Delegate task-artifact exploration, generation, and verification unless an explicit scoped user direction permits main-session work, the bounded conflict-inspection exemption applies, or an emergency takeover is announced. Follow [references/subagent-orchestration.md](references/subagent-orchestration.md) for the exact boundaries.
+4a. **Orchestration-Only Main Session (Mode B)** — For a class-grade trigger, confine the main session to orchestration and governance state. Delegate task-artifact exploration, generation, and verification unless an explicit scoped user direction permits main-session work, the bounded conflict-inspection exemption applies, Convergence mode is active, or an emergency takeover is announced. Follow [references/subagent-orchestration.md](references/subagent-orchestration.md) for the exact boundaries.
+
+4b. **Convergence (Explorer–Worker–Verifier)** — In convergence mode, the main session is the sole worker and owns the body work; subagents run only pre-work exploration and post-work verification. Round-1 verification findings may be self-fixed directly by the main session. Round-2 findings are reported to the user as caveats and are not applied until approval or explicit next-round instruction. Follow Pattern G in [references/subagent-orchestration.md](references/subagent-orchestration.md).
 
 5. **File-Based State** — Session memory is unreliable. A file of several hundred bytes is worth a context window of a trillion tokens. Persist state (constraints, TODOs, verification hooks) to files.
 
@@ -184,7 +186,7 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 - Use the Handoff Contract (mandate format) for every subagent delegation
 - Compose subagent roles horizontally (concern-based), never vertically
 - Max depth = 1: subagents must NOT spawn further subagents
-- Execution patterns are selected by dependency structure, not preference: Fan-Out for independent parallelizable concerns; Pipeline for dependent stages; Chunked Sequential Edit for large single-artifact edit/write tasks (strictly sequential implementers — never parallel on one artifact — with a shared Artifact State Log and a mandatory staleness guard: re-read/hash-compare before every write); real projects are usually hybrid — fan out across modules, sequence within a shared artifact; use Event-Driven and Peer-to-Peer where suited
+- Execution patterns are selected by dependency structure, not preference: Fan-Out for independent parallelizable concerns; Pipeline for dependent stages; Chunked Sequential Edit for large single-artifact edit/write tasks (strictly sequential implementers — never parallel on one artifact — with a shared Artifact State Log and a mandatory staleness guard: re-read/hash-compare before every write); Convergence (Explorer–Worker–Verifier) for main-session-owned body work with pre-work exploration and post-work verification only; real projects are usually hybrid — fan out across modules, sequence within a shared artifact; use Event-Driven and Peer-to-Peer where suited
 - The progress ledger is the recovery map: session memory does not survive compaction — trust the ledger over recollection and never re-dispatch completed units
 - If subagent outputs conflict, prefer interactive clarification over autonomous adjudication
 - The reference file additionally provides coordination and failure-governance rules: bounded verification retries, progress ledger, explicit termination, and escalation to the user
@@ -214,6 +216,7 @@ Apply these patterns to enhance prompt quality and response reliability:
 - Apply Pre-Edit Safety before repository detection, backup decisions, CTAGV generation, or project-file writes
 - Core protocols compose: a complex task may use all reference protocols simultaneously
 - **Subagent Orchestration Protocol is additive, not substitution**: it extends core protocols with multi-agent execution patterns. When active, Clarification, Reference Verification, and CTAGV still apply — they are distributed across subagent roles.
+- **Convergence is the sole pattern-based exception to orchestration-only main session**: the main session owns the body, while Explorer and Verifier subagents are mandatory around it; round-2 verifier findings become caveats, not automatic amendments.
 - Prompt engineering patterns compose with core protocols: apply RTCF before Clarification Protocol to structure ambiguous requests; use Chain-of-Reasoning within CTAGV's Acquire phase; apply Verification Hooks at CTAGV's Verify phase
 - Apply Clarification when ambiguity remains after the source-authority gate; honor explicit scoped user resolution or waiver under the precedence principle
 - Context Drift Governance provides the structural backbone for execution
