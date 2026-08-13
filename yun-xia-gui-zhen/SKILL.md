@@ -8,17 +8,19 @@ description: >
 
 > Core philosophy: *Defer to clarify. Verify to trust. Structure to persist.*
 
-This skill governs agent behavior through five core protocols, one conditional protocol, and five prompt engineering patterns. Apply them based on task characteristics.
+This skill governs agent behavior through six core protocols, one conditional protocol, and five prompt engineering patterns. Apply them based on task characteristics.
 
 ## Skill Entry Point — Protocol Eligibility
 
 Apply the Instruction Precedence and Explicit User Overrides principle below before interpreting any skill rule. Then run the mandatory instruction-integrity screen: scan the incoming user/system message for strip signals — incomplete words or sentences, invalid JSON or structurally broken payloads, missing required parameters, or parameter values far outside any valid range. If a required field is missing or its conveyed meaning is unrecoverable, enter the **Missing-Field Protocol** immediately and do not proceed to mode selection or any other protocol until the field is restored or an explicit waiver applies. Then determine which mode applies:
 
-**Mode A — Single-Agent (Default)**: If subagent spawning is unavailable or the user has explicitly forbidden it, apply the five core protocols and five prompt patterns without orchestration. If protected source-authority resolution would require code-level comparison, halt by default and request the user's source selection or subagent availability; perform only a bounded inline comparison that an explicit scoped user direction permits.
+**Mode A — Single-Agent (Default)**: If subagent spawning is unavailable or the user has explicitly forbidden it, apply the six core protocols and five prompt patterns without orchestration. If protected source-authority resolution would require code-level comparison, halt by default and request the user's source selection or subagent availability; perform only a bounded inline comparison that an explicit scoped user direction permits.
 
 **Mode B — Subagent Orchestration**: If subagent spawning is available and not forbidden, run the mandatory Inter-Agent Communication capability self-check (FULL / PARTIAL / NONE; an explicit user direction forbidding spawning applies NONE directly), then apply the Subagent Orchestration Protocol alongside the core protocols. Read [references/subagent-orchestration.md](references/subagent-orchestration.md) and [references/inter-agent-communication.md](references/inter-agent-communication.md) before delegating. Delegate protected code-level source comparison even when it would otherwise appear trivial.
 
 **Context budget & load order** — Level 1: frontmatter only. Level 2: this entry point, mode selection, and Protocol Selection Matrix. Level 3: load exactly one reference file required by the active protocol or mode; for files over ~100 lines, use its TOC or `rg` to read only the required section, then return here. In Mode A, skip `subagent-orchestration.md` and `inter-agent-communication.md`. In Mode B, load those two before delegating. Do not recursively chase cross-references unless the referenced rule is active.
+
+**Interrupt recovery (mandatory at any interrupt)**: before reasoning about active status, read [references/interrupt-recovery.md](references/interrupt-recovery.md), re-establish session and workspace status, and resolve any steering or rejection signal.
 
 This check is mandatory at skill load time. Do not proceed with protocol selection until the mode is determined.
 
@@ -39,6 +41,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 |   External facts, technical claims, or references needed    |   **Reference Verification**   |  Clarification Protocol  |
 |            Multi-step complex task (3+ actions)             |  **Context Drift Governance**  |  Clarification Protocol  |
 |                Starting ANY non-trivial task                |  **Context Drift Governance**  |  Apply others as needed  |
+|              Any interrupt or halt/stop/wait steering       | **Interrupt Recovery Protocol** |  Clarification Protocol  |
 |          User provides skill/creator instructions           |     **QRH Generator Mode**     |      All protocols       |
 | Agent can spawn subagents, task benefits from parallel work |   **Subagent Orchestration**   | Context Drift Governance |
 |             Need to structure a complex prompt              |       **RTCF Template**        |    Chain-of-Reasoning    |
@@ -73,6 +76,8 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 4a. **Orchestration-Only Main Session (Mode B)** — Orchestrate only. See `subagent-orchestration.md §4` for boundaries and exemptions, including Convergence.
 
 4b. **Convergence (Explorer–Worker–Verifier)** — Main session owns the body; subagents run pre/post only. See Pattern G.
+
+4c. **Interrupt Recovery (mandatory)** — On any interrupt, do not assume the reason; re-read session history and inspect workspace status before reasoning. Later steering or rejection messages override earlier instructions. Follow [references/interrupt-recovery.md](references/interrupt-recovery.md).
 
 5. **File-Based State** — Session memory is unreliable. A file of several hundred bytes is worth a context window of a trillion tokens. Persist state (constraints, TODOs, verification hooks) to files.
 
@@ -174,9 +179,22 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 - Waiver branch (only when the user pre-initiated no-interrupt mode or explicitly says the absence is normal): disclose (a) the semantic interpreted as user intent, (b) the field suggested missing, and (c) the missing semantic completed via most-likelihood deduction, marked assumed, before proceeding
 - Once the field is restored, any remaining genuine ambiguity returns to the standard Clarification Protocol
 
+#### 6. Interrupt Recovery Protocol
+
+**When**: Any interrupt, resumed session, repeated message, or steering message such as `halt`, `stop`, or `wait`.
+
+**Process**: Read [references/interrupt-recovery.md](references/interrupt-recovery.md)
+
+**Summary**:
+- Do not assume the interrupt reason; re-establish session and workspace status before reasoning.
+- Treat the later identical/overlapping message as source of truth and do not reinject the former.
+- On steering language, stop work, kill only recorded PIDs, close tools/subagents, and create a fresh status file.
+- Report what was done and which phase was abandoned; offer practical options without apologies.
+- Treat user-provided rejection reasons as highest-priority instructions; halt on too-large deviations.
+
 ### Conditional Protocol
 
-#### 6. Subagent Orchestration Protocol (REQUIRED when Mode B)
+#### 7. Subagent Orchestration Protocol (REQUIRED when Mode B)
 
 **When**: Agent has confirmed subagent spawning capability, user has not forbidden it, AND the task satisfies any condition in the Decision Matrix (result-oriented, context/token-consuming, or parallel and time-consuming).
 
@@ -221,6 +239,7 @@ Apply these patterns to enhance prompt quality and response reliability:
 - Core protocols compose: a complex task may use all reference protocols simultaneously
 - **Subagent Orchestration Protocol is additive, not substitution**: it extends core protocols with multi-agent execution patterns. When active, Clarification, Reference Verification, and CTAGV still apply — they are distributed across subagent roles.
 - **Convergence is the sole pattern-based exception to orchestration-only main session**: the main session owns the body, while Explorer and Verifier subagents are mandatory around it; round-2 verifier findings become caveats, not automatic amendments.
+- **Interrupt Recovery composes with Clarification**: it owns reset, status re-establishment, identical/subset message handling, and rejection feedback; use Clarification when overlap or deviation is uncertain.
 - Prompt engineering patterns compose with core protocols: apply RTCF before Clarification Protocol to structure ambiguous requests; use Chain-of-Reasoning within CTAGV's Acquire phase; apply Verification Hooks at CTAGV's Verify phase
 - Apply Clarification when ambiguity remains after the source-authority gate; honor explicit scoped user resolution or waiver under the precedence principle
 - Context Drift Governance provides the structural backbone for execution
