@@ -51,6 +51,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 |          Need enforceable constraint declarations           |    **Explicit Constraint**     | Context Drift Governance |
 |              Need embedded quality checkpoints              |     **Verification Hooks**     | Context Drift Governance |
 |          Tool call failed or retry discipline needed         | **Tool Failure & Retry Governance** | Reference Verification |
+|        Editing files with dependent artifacts (docs, tests, headers)        |   **Cascade-Impact Scan**   | Pre-Edit Safety Gate |
 
 ## Universal Principles (Apply Always)
 
@@ -156,6 +157,7 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 - Read constraint file before every task (repetitive reading is required, not redundant)
 - Explicitly show all five phases in-session with actual tool calls
 - Keep intermediates in the OS-specific temp directory by default; clean ordinary temporary files as the final hook, but retain externally depended files, registered backups, and backup location-status state
+- Before editing, run the Cascade-Impact Scan ([references/cascade-impact.md](references/cascade-impact.md)); present cascade changes along-way with the main proposal, per-point via Clarification Protocol, and re-enter the pre-edit gate for new targets
 
 #### 4. QRH Generator Mode
 
