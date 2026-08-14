@@ -53,8 +53,8 @@ The canonical five-spirit system, shared with `../checklist-hft.md`:
 ## Reference Materials
 
 **Chamber references:**
-- `patterns.md` — HFT optimization patterns (pass 1 complete — atomic_queue/CpuPinning-derived; flagship pending)
-- `checklist.md` — high-performance systems quick checklist (pass 1 complete — atomic_queue/CpuPinning-derived)
+- `patterns.md` — HFT optimization patterns (pass 1 + pass 2 complete — atomic_queue/CpuPinning + core/msg_parser-derived; flagship pending)
+- `checklist.md` — high-performance systems quick checklist (pass 1 + pass 2 complete — atomic_queue/CpuPinning + core/msg_parser-derived)
 - `flagship.md` — flagship code examples (pending; designated growth area)
 - Kernel and bypass topics are covered under 金灵·白虎 in `patterns.md` / `checklist.md` (no separate `kernel.md`).
 
@@ -120,4 +120,4 @@ Reorder fields by size (largest to smallest): `id` (8), `price` (8), `qty` (4), 
 
 ---
 
-*Pass 1 (atomic_queue/CpuPinning) folded; 金灵/水灵 sections and flagship pending — designated growth area.*
+*Pass 1 + Pass 2 (core/msg_parser) folded; flagship and kernel-bypass/network-tuning details pending — designated growth area.*

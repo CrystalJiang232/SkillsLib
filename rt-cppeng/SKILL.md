@@ -292,7 +292,7 @@ Review what operations are performed in the loop body. If simple element-wise pr
 | `references/checklist.md` | Review checklist by C++ version | Review passes | Complete |
 | `references/flagship.md` | Production-ready example code | Calibration / examples | Partial |
 | `references/checklist-hft.md` | 五灵 HFT checklist | HFT chamber active | Partial |
-| `references/wuling/` | 五灵 hidden chamber (index, patterns, checklist, flagship) | Trigger: `五灵应象决` or HFT context | Pass 1 complete (patterns + checklist); flagship pending |
+| `references/wuling/` | 五灵 hidden chamber (index, patterns, checklist, flagship) | Trigger: `五灵应象决` or HFT context | Pass 2 complete (patterns + checklist); flagship pending |
 | `interchange/language-style-guide.md` | Optional style sidelane (clang-format complement) | Optional | Sanitized; integration pending |
 
 ## Severity Levels (with Priority Annotations)
@@ -338,9 +338,9 @@ HFT (High-Frequency Trading) and systems optimization archive — a hidden chamb
 | **金灵·白虎** | 肃杀 | Kernel & Bypass | PREEMPT_RT, DPDK, RDMA/RoCE, eBPF/XDP, kernel bypass |
 | **水灵·玄武** | 润下 | Observability & Profiling | perf, eBPF tracing, flame graphs, RDTSC timing, low-overhead probes |
 
-**Status**: Framework fixed; index in place; pass 1 (x2trader atomic_queue/CpuPinning) folded into `references/wuling/patterns.md` + `checklist.md`.
+**Status**: Framework fixed; index in place; pass 1 + pass 2 (atomic_queue/CpuPinning + core/msg_parser) folded into `references/wuling/patterns.md` + `checklist.md`.
 - **Quick checklist** → `references/checklist-hft.md` (isolation, lock-free, latency, kernel dimensions)
-- **Pending**: flagship examples (`references/wuling/flagship.md`) and remaining spirit sections — designated growth area for the learning-from-codebase pass
+- **Pending**: flagship examples (`references/wuling/flagship.md`) and kernel-bypass/network-tuning details — designated growth area for the learning-from-codebase pass
 
 ---
 
