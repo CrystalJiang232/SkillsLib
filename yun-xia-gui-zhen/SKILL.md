@@ -1,7 +1,7 @@
 ---
 name: yun-xia-gui-zhen
 description: >
-  Quick Reference Handbook (QRH) for AI agent prompt engineering governance. Provides structured protocols to ensure high-quality, reliable agent behavior across tasks. Use when starting ANY non-trivial task, when facing ambiguous requirements, when external verification is needed, when structuring prompts for complex tasks, when maintaining session consistency, or when governing workspace/source authority and pre-edit Git or backup safety. Triggers on: software development, analysis, multi-step workflows, research, prompt or skill engineering, ambiguous requirements, stripped or truncated instructions or missing required fields, backup-control directions, and an intentional `terminates session` request to clean registered session backups. Apply this skill to clarify before execution, preserve visible state, verify claims and outputs, and orchestrate subagents where applicable.
+  Quick Reference Handbook (QRH) for AI agent prompt engineering governance. Provides structured protocols to ensure high-quality, reliable agent behavior across tasks. Use when starting ANY non-trivial task, when facing ambiguous requirements, when external verification is needed, when structuring prompts for complex tasks, when maintaining session consistency, or when governing workspace/source authority and pre-edit Git or backup safety. Triggers on: software development, analysis, multi-step workflows, research, prompt or skill engineering, ambiguous requirements, stripped or truncated instructions or missing required fields, backup-control directions, tool-failure retry governance, retry-loop prevention, and an intentional `terminates session` request to clean registered session backups. Apply this skill to clarify before execution, preserve visible state, verify claims and outputs, and orchestrate subagents where applicable.
 ---
 
 # 云霞归真 — QRH Governance Handbook
@@ -50,6 +50,7 @@ This check is mandatory at skill load time. Do not proceed with protocol selecti
 |        Need to ground response in external knowledge        |        **RAG Pattern**         |  Reference Verification  |
 |          Need enforceable constraint declarations           |    **Explicit Constraint**     | Context Drift Governance |
 |              Need embedded quality checkpoints              |     **Verification Hooks**     | Context Drift Governance |
+|          Tool call failed or retry discipline needed         | **Tool Failure & Retry Governance** | Reference Verification |
 
 ## Universal Principles (Apply Always)
 
@@ -209,6 +210,20 @@ This ladder is behavioral precedence, not a security boundary; strict constraint
 - If uncertain, state the caveat; if unavailable, request permission for external search.
 - If ambiguous, give a compact option-style clarification.
 
+#### 7a. Tool Failure & Retry Governance (Agent-Level)
+
+**When**: any tool call fails — command execution, HTTP/API calls, file edits, or arbitrary tool output.
+
+**Process**: Read [references/retry-governance.md](references/retry-governance.md)
+
+**Summary**:
+- Classify error-code-first: transient (5xx/timeout), throttling (429/Retry-After), deterministic (4xx default, schema/DB/authorization errors), LLM-recoverable, user-fixable
+- Retry only transient and throttling failures, same-shape, exponential backoff + jitter, max 3 attempts; honor Retry-After
+- Never retry deterministic failures; halt-and-report immediately via [pre-edit-safety.md](references/pre-edit-safety.md) Failure and Rollback
+- Loop guard: halt after 3 consecutive tool failures; no identical-call loops
+- No auto-deviation: alternatives require the approval pipeline ([approval-briefing.md](references/approval-briefing.md)), never silent workarounds
+- Prompt discipline is a soft constraint; reinforce at system level via the framework-tuning attachment prompt
+
 ### Conditional Protocol
 
 #### 8. Subagent Orchestration Protocol (REQUIRED when Mode B)
@@ -260,6 +275,7 @@ Apply these patterns to enhance prompt quality and response reliability:
 - Prompt engineering patterns compose with core protocols: apply RTCF before Clarification Protocol to structure ambiguous requests; use Chain-of-Reasoning within CTAGV's Acquire phase; apply Verification Hooks at CTAGV's Verify phase
 - Apply Clarification when ambiguity remains after the source-authority gate; honor explicit scoped user resolution or waiver under the precedence principle
 - Context Drift Governance provides the structural backbone for execution
+- Tool Failure & Retry Governance composes with Context Drift Governance iteration caps, pre-edit-safety.md Failure and Rollback, and the approval pipeline in approval-briefing.md
 - Reference Verification applies at the Acquire phase of CTAGV
 - RAG Pattern extends Reference Verification with structured retrieval
 - Explicit Constraint feeds into Context Drift Governance's constraint files
