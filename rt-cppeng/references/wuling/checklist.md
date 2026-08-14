@@ -2,6 +2,8 @@
 
 > 以五灵之名，应天地之象。此卷为 HFT 与高性能系统优化之速查。
 
+> Pass 1 additions (x2trader `atomic_queue/` + `CpuPinning.h`); [P2] items are Consider-level, context-dependent.
+
 ---
 
 ## 木灵·青龙 — Memory & Cache (生发)
@@ -21,6 +23,10 @@
 - [ ] Cache-friendly array traversal order
 - [ ] Evaluate AoS vs. SoA layout
 - [ ] Prefetch inserted into compute-heavy loops
+- [ ] Producer/consumer hot fields on separate cache lines (head/tail)
+- [ ] Immutable ring metadata on a line that never receives stores
+- [ ] Power-of-two ring size with mask-based indexing
+- [ ] Contention-aware index remapping for MPMC rings [P2]
 
 ---
 
@@ -31,6 +37,11 @@
 - [ ] RCU or version snapshots for read-mostly data
 - [ ] Thread count matched to hardware topology (not blind scaling)
 - [ ] No false-shared atomic variables
+- [ ] SPSC fast path without RMW instructions where topology allows
+- [ ] Spin-waits use speculative relaxed loads + ISA pause, not repeated CAS
+- [ ] Relaxed bookkeeping + acquire/release handoff (minimal ordering)
+- [ ] Bounded/exponential backoff on contended spins [P2]
+- [ ] Fair vs unfair spinlock chosen deliberately (latency vs starvation) [P2]
 
 ---
 
@@ -39,6 +50,9 @@
 - [ ] Critical threads pinned to cores
 - [ ] `isolcpus` or cgroups isolation
 - [ ] Interrupts redirected away from critical cores
+- [ ] Pinning performed once inside the thread (affinity inherited by children)
+- [ ] isolcpus target verified via /proc/cmdline or /sys/devices/system/cpu/isolated
+- [ ] Cpuset/cgroup restrictions checked (silent narrowing / EINVAL)
 
 ---
 
@@ -102,4 +116,4 @@ cat /proc/sys/net/ipv4/tcp_*
 
 ---
 
-*Skeleton — designated growth area for the learning-from-codebase pass.*
+*Pass 1 (atomic_queue/CpuPinning) folded above; thresholds, profiling quick reference, and venue checklists still pending — designated growth area.*
