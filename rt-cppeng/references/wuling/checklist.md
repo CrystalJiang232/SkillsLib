@@ -6,96 +6,114 @@
 
 > Pass 2 additions (x2trader `core/` + `msg_parser`); [P2] items are Consider-level.
 
+> Pass 3 additions (option B: qd_ipc_trader + counterfront + dropcopy). Level field: [P1] Recommended (high confidence) / [P2] Consider (medium or context-dependent).
+
 ---
 
 ## 木灵·青龙 — Memory & Cache (生发)
 
 ### Latency Path Separation (supplementary)
 
-- [ ] Distinguish hot/warm/cold paths
-- [ ] No dynamic memory allocation on the hot path
-- [ ] Use `[[likely]]`/`[[unlikely]]` or equivalent branch hints
-- [ ] Keep exception handling out of the hot path
-- [ ] Asynchronous logging
+- [ ] Distinguish hot/warm/cold paths [P1]
+- [ ] No dynamic memory allocation on the hot path [P1]
+- [ ] Use `[[likely]]`/`[[unlikely]]` or equivalent branch hints [P1]
+- [ ] Keep exception handling out of the hot path [P1]
+- [ ] Asynchronous logging [P1]
 
 ### Cache & Locality
 
-- [ ] Check shared data structures for false sharing
-- [ ] `alignas(64)` on critical structs
-- [ ] Cache-friendly array traversal order
-- [ ] Evaluate AoS vs. SoA layout
-- [ ] Prefetch inserted into compute-heavy loops
-- [ ] Producer/consumer hot fields on separate cache lines (head/tail)
-- [ ] Immutable ring metadata on a line that never receives stores
-- [ ] Power-of-two ring size with mask-based indexing
+- [ ] Check shared data structures for false sharing [P1]
+- [ ] `alignas(64)` on critical structs [P1]
+- [ ] Cache-friendly array traversal order [P1]
+- [ ] Evaluate AoS vs. SoA layout [P1]
+- [ ] Prefetch inserted into compute-heavy loops [P1]
+- [ ] Producer/consumer hot fields on separate cache lines (head/tail) [P1]
+- [ ] Immutable ring metadata on a line that never receives stores [P1]
+- [ ] Power-of-two ring size with mask-based indexing [P1]
 - [ ] Contention-aware index remapping for MPMC rings [P2]
 - [ ] Robin-hood hash map with allocator seam (huge-page ready) [P2]
-- [ ] Stack-buffer serialization — zero heap allocation on hot path
-- [ ] Batch zero-copy parsing of packed frames (stride walk)
-- [ ] O(1) indexed per-order timestamp array (no map lookup)
+- [ ] Stack-buffer serialization — zero heap allocation on hot path [P1]
+- [ ] Batch zero-copy parsing of packed frames (stride walk) [P1]
+- [ ] O(1) indexed per-order timestamp array (no map lookup) [P1]
+- [ ] Bounded response batching (pack-until-full) [P1]
+- [ ] Fixed-index position accounting (no maps on fill path) [P1]
+- [ ] Fixed-size hint buffers [P2]
 
 ---
 
 ## 火灵·朱雀 — Lock-free & Concurrency (炎上)
 
-- [ ] Lock-free structures (SPSC/MPMC queue) on the hot path
-- [ ] Minimal memory ordering on atomic operations
-- [ ] RCU or version snapshots for read-mostly data
-- [ ] Thread count matched to hardware topology (not blind scaling)
-- [ ] No false-shared atomic variables
-- [ ] SPSC fast path without RMW instructions where topology allows
-- [ ] Spin-waits use speculative relaxed loads + ISA pause, not repeated CAS
-- [ ] Relaxed bookkeeping + acquire/release handoff (minimal ordering)
+- [ ] Lock-free structures (SPSC/MPMC queue) on the hot path [P1]
+- [ ] Minimal memory ordering on atomic operations [P1]
+- [ ] RCU or version snapshots for read-mostly data [P1]
+- [ ] Thread count matched to hardware topology (not blind scaling) [P1]
+- [ ] No false-shared atomic variables [P1]
+- [ ] SPSC fast path without RMW instructions where topology allows [P1]
+- [ ] Spin-waits use speculative relaxed loads + ISA pause, not repeated CAS [P1]
+- [ ] Relaxed bookkeeping + acquire/release handoff (minimal ordering) [P1]
 - [ ] Bounded/exponential backoff on contended spins [P2]
 - [ ] Fair vs unfair spinlock chosen deliberately (latency vs starvation) [P2]
-- [ ] Bounded fixed-size ring (deterministic queueing delay)
-- [ ] Direct-call dispatch where producer/consumer share the thread
+- [ ] Bounded fixed-size ring (deterministic queueing delay) [P1]
+- [ ] Direct-call dispatch where producer/consumer share the thread [P1]
 - [ ] variant/visitor or index-switch dispatch (no vtable) [P2]
-- [ ] CRTP message handlers (static dispatch)
-- [ ] Per-key (per-instrument) locking instead of global lock
+- [ ] CRTP message handlers (static dispatch) [P1]
+- [ ] Per-key (per-instrument) locking instead of global lock [P1]
+- [ ] Instance-per-thread producer partitioning [P1]
+- [ ] Batched insert-then-cancel [P1]
+- [ ] Thin decode-forward gateway [P1]
+- [ ] Single-threaded event loop for bounded connections [P1]
+- [ ] Read-mostly session registry (shared lock) [P1]
+- [ ] Order dedup by system order ID [P1]
 
 ---
 
 ## 土灵·麒麟 — Scheduling & Isolation (承载)
 
-- [ ] Critical threads pinned to cores
-- [ ] `isolcpus` or cgroups isolation
-- [ ] Interrupts redirected away from critical cores
-- [ ] Pinning performed once inside the thread (affinity inherited by children)
-- [ ] isolcpus target verified via /proc/cmdline or /sys/devices/system/cpu/isolated
-- [ ] Cpuset/cgroup restrictions checked (silent narrowing / EINVAL)
-- [ ] Thread creation vs pinning order deliberate (affinity inherited)
-- [ ] Thread-per-role topology with bounded sleep backoff
-- [ ] Idle-triggered warm-up dispatch during trading
+- [ ] Critical threads pinned to cores [P1]
+- [ ] `isolcpus` or cgroups isolation [P1]
+- [ ] Interrupts redirected away from critical cores [P1]
+- [ ] Pinning performed once inside the thread (affinity inherited by children) [P1]
+- [ ] isolcpus target verified via /proc/cmdline or /sys/devices/system/cpu/isolated [P1]
+- [ ] Cpuset/cgroup restrictions checked (silent narrowing / EINVAL) [P1]
+- [ ] Thread creation vs pinning order deliberate (affinity inherited) [P1]
+- [ ] Thread-per-role topology with bounded sleep backoff [P1]
+- [ ] Idle-triggered warm-up dispatch during trading [P1]
+- [ ] Per-instance core pinning from config [P1]
+- [ ] Startup readiness barrier [P1]
+- [ ] Timestamp-throttled periodic checks [P1]
 
 ---
 
 ## 金灵·白虎 — Kernel & Bypass (肃杀)
 
-- [ ] Kernel bypass evaluated (DPDK/RDMA/io_uring)
-- [ ] Zero-copy data paths where applicable
-- [ ] Shared-memory ring IPC channels (zero-copy, same-host)
-- [ ] Length-prefixed framing for replay/parsing
+- [ ] Kernel bypass evaluated (DPDK/RDMA/io_uring) [P1]
+- [ ] Zero-copy data paths where applicable [P1]
+- [ ] Shared-memory ring IPC channels (zero-copy, same-host) [P1]
+- [ ] Length-prefixed framing for replay/parsing [P1]
+- [ ] TCP heartbeat echo + idle reaping [P1]
+- [ ] Shared-memory risk-limit push [P1]
 
 ---
 
 ## 水灵·玄武 — Observability & Profiling (润下)
 
-- [ ] Stable clock source selected (`tsc`)
-- [ ] Latency measurement with hardware timestamps
-- [ ] Sampling-based profiling with bounded overhead
-- [ ] Per-order segment latency instrumentation (staged stamps)
-- [ ] CLOCK_MONOTONIC for latency deltas (not REALTIME)
+- [ ] Stable clock source selected (`tsc`) [P1]
+- [ ] Latency measurement with hardware timestamps [P1]
+- [ ] Sampling-based profiling with bounded overhead [P1]
+- [ ] Per-order segment latency instrumentation (staged stamps) [P1]
+- [ ] CLOCK_MONOTONIC for latency deltas (not REALTIME) [P1]
 - [ ] RDTSC usage verified: pinned core, turbo controlled, lfence [P2]
+- [ ] Catch-up gating for notification pipelines [P1]
+- [ ] Edge-triggered threshold alerts [P2]
 
 ---
 
 ## Supplementary — Instruction-Level (Cross-Cutting)
 
-- [ ] SIMD assessed for numeric-heavy regions
-- [ ] Conditional branches converted to branchless where possible
-- [ ] Compiler output verified (godbolt) matches expectations
-- [ ] Loop unrolling/vectorization considered
+- [ ] SIMD assessed for numeric-heavy regions [P1]
+- [ ] Conditional branches converted to branchless where possible [P1]
+- [ ] Compiler output verified (godbolt) matches expectations [P1]
+- [ ] Loop unrolling/vectorization considered [P1]
 
 ---
 
@@ -129,10 +147,10 @@ cat /proc/sys/net/ipv4/tcp_*
 
 ## Pending
 
-- [ ] Concrete thresholds (latency budgets, cache-miss targets)
-- [ ] Profiling tool quick reference (perf, eBPF, Intel VTune)
-- [ ] Venue/broker-specific deployment checklists
+- [ ] Concrete thresholds (latency budgets, cache-miss targets) [P1]
+- [ ] Profiling tool quick reference (perf, eBPF, Intel VTune) [P1]
+- [ ] Venue/broker-specific deployment checklists [P1]
 
 ---
 
-*Pass 1 + Pass 2 (core/msg_parser) folded above; thresholds, profiling quick reference, and venue checklists still pending — designated growth area.*
+*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B) folded above; thresholds, profiling quick reference, and venue checklists still pending — designated growth area.*

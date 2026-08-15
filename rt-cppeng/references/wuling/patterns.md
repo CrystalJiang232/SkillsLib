@@ -6,6 +6,8 @@
 
 > Pass 2 (x2trader `core/` + `msg_parser`): production patterns for bounded queues, dispatch, IPC, and timing — added below.
 
+> Pass 3 (option B: qd_ipc_trader + x2counterfront + x2dropcopy): gateway, batching, partitioning, and monitoring patterns — added below.
+
 ---
 
 ## 木灵·青龙 — Memory & Cache (生发)
@@ -166,6 +168,70 @@ using TimeStampArrayType = std::array<StampPerOrderType, MaxSupportedOrders>;
 **Implementation notes:**
 - O(1) index addressing, no allocation, no hashing; stamps are zeroed after logging to avoid double-reporting.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+### Pattern: Bounded Response Batching (Pack-Until-Full)
+
+**Context:** Forwarding many query-result records to downstream TCP clients.
+
+**Problem:** One send per record multiplies syscalls and packets.
+
+**Solution:** Accumulate records into one package; flush when the buffer is full, then re-pack and continue.
+
+```cpp
+for( auto& item : vecField ) {
+    if( !packageMsg.encodeField( item ) ) {
+        ptrDerived->sendPackage( packageMsg );
+        packageMsg.encodeHead( stHead ); packageMsg.encodeRspInfo( stRspInfo );
+        packageMsg.encodeField( item );
+    }
+}
+packageMsg.setEndFlag(); ptrDerived->sendPackage( packageMsg );
+```
+
+**Implementation notes:**
+- Constraint: batch size is bounded by the buffer (pack-until-full); never use time-based coalescing on latency paths.
+- Account for Nagle buffering; flush at end-of-response so latency stays bounded.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Fixed-Index Position Accounting
+
+**Context:** Per-instrument position state updated on every fill/cancel notification.
+
+**Problem:** Map-based state adds lookups and allocation to the fill path.
+
+**Solution:** Position state lives in arrays indexed by direction/offset-flag enums; fills and frees are O(1) arithmetic.
+
+```cpp
+void onFill( int ref, OffsetFlagType oflag, DirectionType dir, int volume ) {
+    changeFrozenPosition( ref, oflag, dir, -volume );
+    changePosition( oflag, dir, volume );
+}
+```
+
+**Implementation notes:**
+- Close priority (yesterday-before-today) is a switch over the offset flag; no maps or allocations on the fill path.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Fixed-Size Hint Buffers
+
+**Context:** Building risk-counter keys from instrument hints on the notification path.
+
+**Problem:** Heap allocation per notification adds jitter and fragmentation.
+
+**Solution:** A fixed-size stack buffer with a bounded copy (6 bytes for options).
+
+```cpp
+char strHint[16] = "";
+if( pInstrument->ProductClass == YD_PC_Options ) { std::memcpy( strHint, pInstrument->InstrumentHint, 6 ); strHint[6] = '\0'; }
+```
+
+**Implementation notes:**
+- Avoids allocation on the notification path; benefit scales with notification volume — benchmark before adopting elsewhere.
+- Severity: Consider [P2]; medium confidence — workload-dependent.
 
 ---
 
@@ -383,6 +449,130 @@ std::unique_lock lock( instrData.getLock() );
 - Concurrent orders on different instruments never contend; the lock is held only for the exact mutation window.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
+### Pattern: Instance-Per-Thread Producer Partitioning
+
+**Context:** Multiple producers submitting orders concurrently.
+
+**Problem:** Shared producer state serializes submissions and adds contention.
+
+**Solution:** Each producer thread owns its own API instance; producers never share mutable state.
+
+```cpp
+std::shared_ptr<Trader> trader( x2trader::X2TraderApi::CreateX2TraderApi( cfg, 0, index ), ... );
+trader->Run();
+while( !traderSPI.getTradeReady() ) { std::this_thread::sleep_for( std::chrono::seconds( 1 ) ); }
+```
+
+**Implementation notes:**
+- Partitioning by instance removes cross-producer contention by construction; the only shared resource is the counter behind the API.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Batched Insert-Then-Cancel
+
+**Context:** A strategy that submits and cancels many orders per tick.
+
+**Problem:** Interleaving inserts and cancels amplifies per-call overhead.
+
+**Solution:** Collect order refs in a pre-reserved vector, dispatch all inserts, then run the cancel sweep.
+
+```cpp
+std::vector<x2trader::OrderRefType> orderRefs;
+orderRefs.reserve( m_instrumentIDs.size() );
+for( auto id : m_instrumentIDs ) { m_order.InstrumentID = id; orderRefs.push_back( m_trader->ReqInsertOrder( &m_order ) ); }
+for( auto orderRef : orderRefs ) { if( orderRef > 0 && cfg.getIsLimitOrder() ) m_trader->ReqCancelOrder( orderRef ); }
+```
+
+**Implementation notes:**
+- Separates the insert burst from the cancel sweep and avoids reallocation on the per-tick path.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Thin Decode-Forward Mediation Layer
+
+**Context:** A gateway between trading clients and a vendor counter.
+
+**Problem:** Gateway business logic on the order path adds latency and drift risk.
+
+**Solution:** Decode the request body, forward to the vendor API, return the error code; session id doubles as correlation id.
+
+```cpp
+const char* pBodyBuffer = packageMsg.getBodyBuffer();
+if( pBodyBuffer ) { CESwapInputOrderField stInputOrder = *(CESwapInputOrderField*)pBodyBuffer; ret = m_pTraderApi->ReqOrderInsert( &stInputOrder, sessionId ); }
+return ret;
+```
+
+**Implementation notes:**
+- A forwarding gateway adds no business logic on the hot path; validation lives in the counter or the client.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Single-Threaded Event Loop for Bounded Connections
+
+**Context:** A TCP gateway with few downstream connections.
+
+**Problem:** Multi-threaded event dispatch adds synchronization complexity without benefit at low connection counts.
+
+**Solution:** Run one asio io_context on one thread; scale to a pool only when connection count grows.
+
+```cpp
+m_pThread = std::make_shared<std::thread>( [this]() { m_ioContext.run(); } );
+```
+
+**Implementation notes:**
+- Precondition: downstream connection count is low; revisit with an io_context pool (or multiple io_contexts) when it grows.
+- Single-thread run avoids synchronization complexity and enables asio single-thread optimizations.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Read-Mostly Session Registry with Shared Locking
+
+**Context:** Per-counter session maps read on every notification, written only on connect/disconnect.
+
+**Problem:** A plain mutex serializes the broadcast path against rare connection churn.
+
+**Solution:** shared_mutex: broadcasts take the read lock; connect/disconnect take the write lock.
+
+```cpp
+void pushSession( int sessionId, const std::shared_ptr<TcpConnection>& pConnection ) {
+    writeLock locker( m_mtx ); m_tcpSession[sessionId] = pConnection;
+}
+template<typename Field, int FunctionID>
+void sendSinglePackageMsg( ... ) {
+    readLock locker( m_mtx );
+    for( const auto& item : m_tcpSession ) { ... sendPackage( ... ); }
+}
+```
+
+**Implementation notes:**
+- Notifications dominate over connection churn; concurrent readers proceed without blocking each other.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Order Dedup by System Order ID
+
+**Context:** Drop-copy streams that may deliver duplicate order notifications.
+
+**Problem:** Repeated notifications corrupt position accounting.
+
+**Solution:** Deduplicate by the exchange system order id before touching position state.
+
+```cpp
+if( m_setOrderSysID.find( pOrder->OrderSysID ) == m_setOrderSysID.end() ) {
+    m_setOrderSysID.insert( pOrder->OrderSysID );
+    m_mapData[pInstrument->InstrumentID].open( pOrder->OrderRef, offsetFlag, direction, pOrder->OrderVolume );
+}
+```
+
+**Implementation notes:**
+- Constraint: the dedup set must stay bounded for the notification volume; evict or scope it per day/session as needed.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
 ---
 
 ## 土灵·麒麟 — Scheduling & Isolation (承载)
@@ -469,6 +659,60 @@ else if( ( TimingInfoT::Rdtsc::read() - emptyStart >= m_warmUpTickInterval ) && 
 - In ULTRA mode strategies own their warm-up; the internal warm-up path is compiled out.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
+### Pattern: Per-Instance Core Pinning from Config
+
+**Context:** Multiple quote/trader producer pairs in one process.
+
+**Problem:** Without per-instance affinity, producers migrate between cores.
+
+**Solution:** Each API pair is created with its own cpu id from the config vector.
+
+```cpp
+std::shared_ptr<X2QuoteApi> api( X2QuoteApi::CreateX2QuoteApi( cfg.getCPUID()[index], cfg.getMemoryKey() ), ... );
+```
+
+**Implementation notes:**
+- One core per producer keeps ticks and order submission on a dedicated, isolated CPU.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Startup Readiness Barrier
+
+**Context:** Bringing up several producer instances.
+
+**Problem:** Parallel startup races login and risks half-initialized producers.
+
+**Solution:** Bring producers up sequentially; each waits for trade-ready before the next is created.
+
+```cpp
+trader->Run();
+while( !traderSPI.getTradeReady() ) { std::this_thread::sleep_for( std::chrono::seconds( 1 ) ); }
+```
+
+**Implementation notes:**
+- Deterministic startup with bounded wait; tune the sleep for the vendor's login latency.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Timestamp-Throttled Periodic Checks
+
+**Context:** Monitoring tasks that must not scale with event rate.
+
+**Problem:** Running checks on every event burns CPU.
+
+**Solution:** Schedule on a timer and self-throttle by elapsed time since the last run.
+
+```cpp
+if( ( getCurrentTimestamp() - m_lastNetPositionCheckTimestamp ) < seconds ) { return; }
+m_lastNetPositionCheckTimestamp = getCurrentTimestamp();
+```
+
+**Implementation notes:**
+- Bounded monitoring overhead independent of tick rate; verify intervals are small enough to catch violations in time.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
 ---
 
 ## 金灵·白虎 — Kernel & Bypass (肃杀)
@@ -510,6 +754,47 @@ while( pos - start < len ) {
 
 **Implementation notes:**
 - A single type+length header makes framing trivial and version-tolerant.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+### Pattern: TCP Heartbeat Echo + Idle Reaping
+
+**Context:** Long-lived gateway connections.
+
+**Problem:** Dead peers are not detected on the data path.
+
+**Solution:** Echo heartbeats and reap sessions idle beyond twice the heartbeat interval on a steady timer.
+
+```cpp
+if( timeStamp - iter->second->getLastTimeStamp() >= 2 * CheckHeartTimeOut ) {
+    iter->second->handleDisconnect( "heartbeat timeout." ); iter = m_tcpConnection.erase( iter );
+}
+```
+
+**Implementation notes:**
+- Connection health is enforced out-of-band on a steady timer, not on the data path.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Shared-Memory Risk-Limit Push
+
+**Context:** Pushing risk-limit updates from a monitor process to the trader.
+
+**Problem:** Socket delivery adds copies and syscalls for a tiny same-host message.
+
+**Solution:** An O_WRONLY shared-memory channel with compile-time-sized stack buffers.
+
+```cpp
+m_writerChannelPtr = std::make_shared<ShmChannel<ShmBuffer<ShmBase>, void, O_WRONLY>>( std::string( "shm://mount@" ) + channelName, false );
+template<typename MsgType> IpcWriter& writeMsg( const MsgType& msg, MessageType type ) {
+    char msgBuffer[ipcMessageSize<MsgType>()]; MsgType* msgPtr;
+    IpcPackage::packMessage( msgBuffer, type, msgPtr ); *msgPtr = msg;
+    m_writerChannelPtr->write( msgBuffer, sizeof( msgBuffer ) ); return *this;
+}
+```
+
+**Implementation notes:**
+- Zero-copy same-host push with no heap allocation on the write path; same pattern family as the shm channels above.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ---
@@ -590,6 +875,46 @@ clock_gettime( CLOCK_MONOTONIC, &time );
 - Audit existing code for interval math based on `REALTIME`; wall-clock timestamps remain fine for display.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
+### Pattern: Catch-Up Gating for Notification Pipelines
+
+**Context:** Drop-copy monitors that must not alert before their state is complete.
+
+**Problem:** Alerts during initial replay are false alarms.
+
+**Solution:** Suppress notifications until the initial state has been replayed; reset the gate on re-login after disconnects.
+
+```cpp
+// notifyOrder/notifyTrade:
+if( !m_hasCaughtUp ) { return; }
+// on login: m_hasCaughtUp = false; on caught-up: m_hasCaughtUp = true;
+```
+
+**Implementation notes:**
+- Alerts and summaries are only trustworthy once the pipeline has caught up with server state.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Edge-Triggered Threshold Alerts
+
+**Context:** Risk and stop-loss threshold monitoring.
+
+**Problem:** Level-triggered alerts spam on every poll while the condition holds.
+
+**Solution:** Alert only on the rising edge of a crossing; restore state on the falling edge.
+
+```cpp
+static bool isLastTriggerThreshold = false;
+bool isTrigger = GE( riskRatio, m_riskRatio ) || LE( profitRatio, m_stopLossRatio );
+if( isLastTriggerThreshold && !isTrigger ) { isLastTriggerThreshold = false; }
+if( !isLastTriggerThreshold && isTrigger ) { /* notify + send risk-limit IPC */ isLastTriggerThreshold = true; }
+```
+
+**Implementation notes:**
+- Avoids alert spam while ensuring every crossing is reported.
+- Caveat: the edge state here is a static local; use per-instance member state when multiple instances share a process.
+- Severity: Consider [P2]; medium confidence — design observation.
+
 ---
 
 ### Pending: Latency Measurement & Profiling
@@ -662,6 +987,18 @@ External verification performed per item; skill files stay dependency-free and t
 - [P2] **RDTSC for interval measurement** — pin + disable turbo + lfence before trusting tick→ns conversion; otherwise use `clock_gettime(CLOCK_MONOTONIC)`.
 - [P2] **Robin-hood hash maps** — better locality than `std::unordered_map` in typical cases; benchmark in the target environment (published speedups vary widely).
 
+### Cross-Cutting Guidance — Pass 3 (option B)
+
+External verification performed per item; skill files stay dependency-free and the references remain in-session. Severity: [P1] Recommended (high confidence), [P2] Consider (medium confidence or context-dependent).
+
+- [P1] **Single-threaded event loop for bounded connections** — avoids synchronization complexity and enables asio single-thread optimizations. Precondition: downstream connection count is low; scale to an io_context pool when it grows.
+- [P1] **Bounded response batching** — pack-until-full reduces syscalls and packets. Constraint: batch size bounded and flush at end-of-response; never time-based coalescing on latency paths; account for Nagle.
+- [P1] **Thin decode-forward gateway** — the forwarding layer adds no business logic; correlation rides the request id.
+- [P1] **Instance-per-thread partitioning** — removes cross-producer shared state by construction.
+- [P1] **Idempotent event handling** — dedup sets keep repeated vendor notifications from corrupting state. Constraint: dedup set bounded for the notification volume.
+- [P2] **Static locals for instance state** — static vectors/flags in member functions are process-wide; prefer member state with multiple instances per process (design observation).
+- [P2] **Timer-throttled monitoring** — elapsed-time guards bound overhead; verify threshold intervals catch violations in time.
+
 ---
 
 ### Pending: Jitter Measurement & Profiling Methods
@@ -671,4 +1008,4 @@ External verification performed per item; skill files stay dependency-free and t
 
 ---
 
-*Pass 1 + Pass 2 (core/msg_parser) folded; flagship and kernel-bypass/network-tuning details pending — designated growth area.*
+*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B) folded; flagship and kernel-bypass/network-tuning details pending — designated growth area.*
