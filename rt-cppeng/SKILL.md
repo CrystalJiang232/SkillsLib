@@ -37,7 +37,7 @@ The following pattern types are **intentionally excluded** from this skill's cat
 
 | Category | Rationale | Examples |
 |----------|-----------|----------|
-| **Optimize-only recommendations** | Weak impact; prefer clarity over micro-optimization unless performance-critical | Loop unrolling hints, `[[likely]]`/`[[unlikely]]` annotations |
+| **Optimize-only recommendations** | Weak impact; prefer clarity over micro-optimization unless performance-critical | Loop unrolling hints, `[[likely]]`/`[[unlikely]]` annotations used purely for prediction |
 | **Obvious grammar/syntax errors** | Easily detected by compiler; error messages are self-explanatory | Missing semicolons, unmatched braces, undeclared identifiers |
 
 Focus on **semantic improvements** and **idiomatic modernization** that compilers cannot auto-suggest.

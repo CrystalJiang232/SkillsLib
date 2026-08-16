@@ -72,8 +72,8 @@ Reuse the Roc Thunder severity system, adjusted for performance-critical systems
 | Level | Priority | Criteria | Example |
 |-------|----------|----------|---------|
 | **Critical** | P0 | Deterministic latency breakage, system-level performance traps | Cross-NUMA memory access, syscall in the hot path |
-| **Recommended** | P1 | Significant performance improvement opportunity | Cache-line alignment, prefetch insertion |
-| **Consider** | P2 | Micro-optimization or context-dependent | `[[likely]]`/`[[unlikely]]`, loop unrolling |
+| **Recommended** | P1 | Significant performance improvement opportunity | Cache-line alignment, hot/cold path separation |
+| **Consider** | P2 | Micro-optimization or context-dependent | Software prefetch, loop unrolling, branchless conversion |
 
 ---
 

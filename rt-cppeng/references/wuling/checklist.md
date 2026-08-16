@@ -16,7 +16,7 @@
 
 - [ ] Distinguish hot/warm/cold paths [P1]
 - [ ] No dynamic memory allocation on the hot path [P1]
-- [ ] Use `[[likely]]`/`[[unlikely]]` or equivalent branch hints [P1]
+- [ ] Mark cold/rare paths with `[[likely]]`/`[[unlikely]]` hints to keep the hot loop compact [P1]
 - [ ] Keep exception handling out of the hot path [P1]
 - [ ] Asynchronous logging [P1]
 
@@ -26,7 +26,7 @@
 - [ ] `alignas(64)` on critical structs [P1]
 - [ ] Cache-friendly array traversal order [P1]
 - [ ] Evaluate AoS vs. SoA layout [P1]
-- [ ] Prefetch inserted into compute-heavy loops [P1]
+- [ ] Prefetch inserted into compute-heavy loops [P2]
 - [ ] Producer/consumer hot fields on separate cache lines (head/tail) [P1]
 - [ ] Immutable ring metadata on a line that never receives stores [P1]
 - [ ] Power-of-two ring size with mask-based indexing [P1]
@@ -111,9 +111,9 @@
 ## Supplementary — Instruction-Level (Cross-Cutting)
 
 - [ ] SIMD assessed for numeric-heavy regions [P1]
-- [ ] Conditional branches converted to branchless where possible [P1]
+- [ ] Conditional branches converted to branchless where possible [P2]
 - [ ] Compiler output verified (godbolt) matches expectations [P1]
-- [ ] Loop unrolling/vectorization considered [P1]
+- [ ] Loop unrolling considered (profile-driven only) [P2]
 
 ---
 
