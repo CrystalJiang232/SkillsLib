@@ -266,6 +266,21 @@ Apply these patterns to enhance prompt quality and response reliability:
 
 **RAG Pattern**: Read [references/rag-pattern.md](references/rag-pattern.md) for retrieval-augmented generation workflows.
 
+## Bootstrap Mode (opt-in, inactive by default)
+
+Bootstrap is an **active self-scan** mode, distinct from the passive protocol triggers above. It is disabled by default: no bootstrap files are loaded at skill load, and the passive trigger surface is unchanged.
+
+**Activation**: the user must explicitly invoke it by saying "check the current configuration status" or an equivalent description (e.g., "bootstrap scan", "system self-check", "setup check", "run the configuration scan"). Do not enter Bootstrap Mode otherwise.
+
+**When invoked**, the agent:
+
+- Reads `bootstrap/README.md` (entry contract) and `bootstrap/checks.md` (normative checklist).
+- Runs the scan read-only, recording PASS / WARN / FAIL / SKIP with evidence, and fills a copy of `checks.md` in the host-specific temporary directory.
+- Reports to the user which items are not properly set up, with recommended values and the approach to modify them; never modifies system configuration automatically.
+- Applies the invariants in `bootstrap/README.md`: read-only, secrets presence-only, no skill self-checks, no network checks.
+
+Packaging/reinstall of the skill (post-edit maneuvers) is outside this mode and requires explicit user direction.
+
 ## Integration Notes
 
 - Apply the Instruction Precedence and Explicit User Overrides principle before resolving any protocol interaction
