@@ -8,6 +8,8 @@
 
 > Pass 3 additions (option B: qd_ipc_trader + counterfront + dropcopy). Level field: [P1] Recommended (high confidence) / [P2] Consider (medium or context-dependent).
 
+> Kernel-bypass evaluation + network-stack tuning pass: 金灵 rows below; [P2] items are Consider-level, deployment-specific.
+
 ---
 
 ## 木灵·青龙 — Memory & Cache (生发)
@@ -92,6 +94,11 @@
 - [ ] Length-prefixed framing for replay/parsing [P1]
 - [ ] TCP heartbeat echo + idle reaping [P1]
 - [ ] Shared-memory risk-limit push [P1]
+- [ ] Busy poll configured where driver-supported (`net.core.busy_poll`/`busy_read`, `SO_BUSY_POLL`) [P2]
+- [ ] `tcp_notsent_lowat` tuned for write-queue writability [P2]
+- [ ] NIC IRQ/RSS placement verified (interrupts off critical cores, RSS queues, irqbalance off) [P2]
+- [ ] Socket/buffer sizing reviewed (`rmem_max`/`wmem_max`/`netdev_max_backlog`) [P2]
+- [ ] PFC/ECN/DCB evaluated for lossless fabric (RoCE/RDMA) [P2]
 
 ---
 
@@ -153,4 +160,4 @@ cat /proc/sys/net/ipv4/tcp_*
 
 ---
 
-*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B) folded above; thresholds, profiling quick reference, and venue checklists still pending — designated growth area.*
+*Pass 1–3 folded above; kernel-bypass evaluation and network-stack tuning added. Thresholds, profiling quick reference, venue checklists, and 水灵 profiling sections still pending — designated growth area.*
