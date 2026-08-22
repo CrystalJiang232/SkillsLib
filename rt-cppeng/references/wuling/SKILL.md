@@ -53,9 +53,9 @@ The canonical five-spirit system, shared with `../checklist-hft.md`:
 ## Reference Materials
 
 **Chamber references:**
-- `patterns.md` — HFT optimization patterns (pass 1–3 complete — atomic_queue/CpuPinning + core/msg_parser + option B-derived; flagship pending)
-- `checklist.md` — high-performance systems quick checklist (pass 1–3 complete — atomic_queue/CpuPinning + core/msg_parser + option B-derived)
-- `flagship.md` — flagship code examples (pending; designated growth area)
+- `patterns.md` — HFT optimization patterns (pass 1–3 + B-task + 水灵 profiling complete — atomic_queue/CpuPinning + core/msg_parser + option B-derived)
+- `checklist.md` — high-performance systems quick checklist (pass 1–3 + B-task + 水灵 profiling complete — atomic_queue/CpuPinning + core/msg_parser + option B-derived)
+- `flagship.md` — flagship code examples (rounds 1–2 complete — 五灵·锦标 / 五灵·蓬山)
 - Kernel and bypass topics are covered under 金灵·白虎 in `patterns.md` / `checklist.md` (no separate `kernel.md`).
 
 **General references (still available):**
@@ -120,4 +120,4 @@ Reorder fields by size (largest to smallest): `id` (8), `price` (8), `qty` (4), 
 
 ---
 
-*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B) folded; flagship and kernel-bypass/network-tuning details pending — designated growth area.*
+*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B), the B-task (kernel bypass / network tuning), and the 水灵 profiling round folded; flagship rounds 1–2 complete. Thresholds, profiling quick reference, and venue checklists remain pending — designated growth area.*

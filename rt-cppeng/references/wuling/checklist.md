@@ -112,6 +112,7 @@
 - [ ] RDTSC usage verified: pinned core, turbo controlled, lfence [P2]
 - [ ] Catch-up gating for notification pipelines [P1]
 - [ ] Edge-triggered threshold alerts [P2]
+- [ ] Latency distribution measured via percentiles/histograms (p50/p99/p999), not averages [P1]
 
 ---
 
@@ -160,4 +161,4 @@ cat /proc/sys/net/ipv4/tcp_*
 
 ---
 
-*Pass 1–3 folded above; kernel-bypass evaluation and network-stack tuning added. Thresholds, profiling quick reference, venue checklists, and 水灵 profiling sections still pending — designated growth area.*
+*Pass 1–3 folded above; kernel-bypass evaluation, network-stack tuning, and 水灵 profiling rows added. Concrete thresholds, a full profiling-tool quick reference, and venue checklists remain pending — designated growth area.*

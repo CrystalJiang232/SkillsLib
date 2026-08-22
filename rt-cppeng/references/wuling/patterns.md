@@ -966,15 +966,54 @@ if( !isLastTriggerThreshold && isTrigger ) { /* notify + send risk-limit IPC */ 
 
 ---
 
-### Pending: Latency Measurement & Profiling
+### Pattern: Latency Measurement & Profiling
 
-- [ ] Hardware timestamps and RDTSC timing
-- [ ] perf/eBPF profiling with bounded overhead
+**Context:** Sub-microsecond latency work (order handling, drop-copy monitoring) must be measurable without distorting the path it measures.
 
-### Pending: Timer & Clock Source Selection
+**Problem:** Coarse wall clocks miss short segments, and every-event tracing adds enough overhead to change the result; unmeasured hot paths regress silently.
 
-- [ ] Prefer a stable `tsc` clocksource where available
-- [ ] Evaluate `clock_gettime` vs. RDTSC on the hot path
+**Solution:** Layer two measurement styles. On the hot path, stamp staged observation points with hardware timestamps (serializing RDTSC) or a vDSO monotonic clock, then aggregate segment deltas off the path. For whole-process attribution, use sampling profiling (`perf record -F <hz>`, hardware event-based sampling) and targeted eBPF probes instead of tracing everything.
+
+```cpp
+// Reuse the flagship harness idiom: stamp fixed observation points on the
+// hot path, then compute segment deltas off it.
+order.mark( OrderObs::RiskBegin, clock::read_tsc() );
+// ... risk computation ...
+order.mark( OrderObs::RiskEnd, clock::read_tsc() );
+// aggregate: order.segment( OrderObs::RiskBegin, OrderObs::RiskEnd )
+```
+
+**Implementation notes:**
+- RDTSC requires a pinned core, controlled turbo, and lfence serialization; otherwise use `clock::read_ns()` (CLOCK_MONOTONIC via vDSO).
+- Sampling collects a subset of events and is the low-overhead default for profiling; tracing collects every event and costs more. Tracepoints default to a sampling period of 1 (every event) — set `-F`/`-c` explicitly.
+- eBPF runs instrumentation in-kernel (kprobe/uprobe/tracepoint) with verifier and JIT checks; overhead is bounded and near-zero while probes are not firing, but uprobes cross the user/kernel boundary.
+- Keep in-path instrumentation bounded: a few stamps per order, aggregated off the path; verify overhead against an uninstrumented baseline.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Timer & Clock Source Selection
+
+**Context:** Interval timing on or near the hot path, with a stable, consistent timebase across the system.
+
+**Problem:** The wrong clock distorts deltas: `CLOCK_REALTIME` is NTP-adjusted, HPET/ACPI_PM reads are far slower than TSC, and bare RDTSC without pinning and turbo control is not a stable clock.
+
+**Solution:** Default to `CLOCK_MONOTONIC` through the vDSO (userspace, no syscall on modern kernels). Opt into RDTSC only for sub-microsecond intervals on a pinned core with lfence serialization. Verify the kernel clocksource before trusting tick-to-ns conversion.
+
+```cpp
+// default: vDSO-backed, no syscall on modern Linux
+uint64_t ns = clock::read_ns(); // CLOCK_MONOTONIC
+
+// hot-path opt-in: pinned core + controlled turbo
+uint64_t ticks = clock::read_tsc(); // lfence; rdtsc; lfence
+```
+
+**Implementation notes:**
+- Verify `/sys/devices/system/clocksource/clocksource0/current_clocksource` shows `tsc`. The kernel prefers TSC, then HPET, then ACPI_PM; reading TSC is a register read, while HPET and ACPI_PM are substantially slower (cost order: TSC < HPET < ACPI_PM).
+- `clock_gettime(CLOCK_MONOTONIC)` is exported through the vDSO on Linux — a function call plus a few memory accesses, not a syscall — but still costs more than a raw RDTSC.
+- RDTSC counts reference cycles, not core cycles; tick-to-ns conversion is only stable with a pinned core and controlled frequency behavior.
+- Reserve `CLOCK_REALTIME` for wall-clock display; never use it for latency deltas.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ---
 
@@ -1050,11 +1089,36 @@ External verification performed per item; skill files stay dependency-free and t
 
 ---
 
-### Pending: Jitter Measurement & Profiling Methods
+### Pattern: Jitter Measurement & Profiling Methods
 
-- [ ] Define latency budgets and measurement methodology
-- [ ] Establish sampling rates and overhead targets
+**Context:** Tail latency and jitter, not averages, determine trading-system quality.
+
+**Problem:** The mean hides heavy-tailed distributions, coarse sampling misses spikes, and unbudgeted instrumentation distorts the path it measures.
+
+**Solution:** Measure distributions, not averages: record percentiles (p50/p99/p999) and log-spaced histograms of segment deltas, and track jitter as the spread or variation of consecutive samples. Set budgets as percentile targets aligned to venue/broker SLAs, and bound sampling rates and instrumentation overhead.
+
+```cpp
+// Illustrative: log2-spaced histogram bucket for a delta in nanoseconds.
+// Accumulation happens off the hot path; resolution widens as delta grows.
+uint32_t logBucket( uint64_t deltaNs ) noexcept
+{
+    return deltaNs == 0 ? 0u : uint32_t( 64 - __builtin_clzll( deltaNs ) );
+}
+void record( uint64_t deltaNs ) noexcept
+{
+    uint32_t b = logBucket( deltaNs );
+    if( b < BUCKET_COUNT )
+        ++m_buckets[b];
+}
+```
+
+**Implementation notes:**
+- Report percentiles and the maximum alongside any mean; real latency distributions are heavy-tailed, and tail percentiles expose the risk averages hide.
+- Methodology only: numeric budgets must come from venue/broker requirements (per-venue SLAs); do not hard-code unverified targets.
+- Bound profiling overhead: frequency-limited sampling (`perf record -F`) and in-kernel eBPF aggregation (bcc/bpftrace) keep cost low; Intel VTune hardware event-based sampling has minimal collection overhead versus user-mode sampling. Flame graphs visualize sampled stacks for hot-path identification.
+- Verify instrumentation overhead with a null-run comparison against an uninstrumented baseline.
+- Severity: Recommended [P1] for the methodology; numeric budgets are venue/broker-specific and deferred.
 
 ---
 
-*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B) folded; flagship examples and kernel-bypass/network-tuning sections complete; 水灵 profiling sections pending — designated growth area.*
+*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B) folded; flagship examples, kernel-bypass/network-tuning, and 水灵 profiling sections complete; concrete thresholds and a full profiling-tool quick reference remain pending — designated growth area.*
