@@ -72,40 +72,87 @@ net::awaitable<std::optional<IoResult>> read_with_timeout(
 
 ---
 
-## Atomic State Machine with Memory Ordering
+## MPMC Slot State Machine with Per-Slot Handshakes
 
-**Pattern:** Explicit `acquire`/`release` pairs for thread-safe state transitions.
+**Pattern:** Bounded multi-producer multi-consumer ring where index claims use relaxed CAS and per-slot atomic states (`EMPTY → STORING → STORED → LOADING → EMPTY`) hand the payload between exactly one producer and one consumer.
 
 ```cpp
-enum class ConnState : uint8_t { Connected, Handshaking, Established, Closing };
+// Requires: <atomic>, <cstddef>, <utility>, <emmintrin.h> (x86)
 
-class Connection
+enum class SlotState : unsigned char { EMPTY, STORING, STORED, LOADING };
+
+template<class T, size_t CAPACITY>
+class MpmcSlotRing
 {
-    std::atomic<ConnState> state;
-    
+    static_assert((CAPACITY & (CAPACITY - 1)) == 0, "capacity must be a power of two");
+    static constexpr size_t MASK = CAPACITY - 1;
+
+    alignas(64) std::atomic<size_t> m_head{0};
+    alignas(64) std::atomic<size_t> m_tail{0};
+    alignas(64) std::atomic<SlotState> m_states[CAPACITY]{};
+    alignas(64) T m_slots[CAPACITY];
+
 public:
-    ConnState get_state() const 
-    { 
-        return state.load(std::memory_order_acquire); 
-    }
-    
-    void set_state(ConnState new_state) 
-    { 
-        state.store(new_state, std::memory_order_release); 
-    }
-    
-    bool transition_to_closing()
+    template<class U>
+    bool try_push(U&& value) noexcept
     {
-        // Atomic test-and-set
-        return state.exchange(ConnState::Closing, std::memory_order_acq_rel) 
-            != ConnState::Closing;
+        size_t head = m_head.load(std::memory_order_relaxed);
+        for (;;)
+        {
+            if (head - m_tail.load(std::memory_order_relaxed) >= CAPACITY)
+                return false;
+            if (m_head.compare_exchange_strong(head, head + 1,
+                                               std::memory_order_relaxed,
+                                               std::memory_order_relaxed))
+                break;
+        }
+        auto& state = m_states[head & MASK];
+        SlotState expected = SlotState::EMPTY;
+        while (!state.compare_exchange_strong(expected, SlotState::STORING,
+                                              std::memory_order_acquire,
+                                              std::memory_order_relaxed))
+        {
+            while (state.load(std::memory_order_relaxed) != SlotState::EMPTY)
+                _mm_pause();
+            expected = SlotState::EMPTY;
+        }
+        m_slots[head & MASK] = std::forward<U>(value);
+        state.store(SlotState::STORED, std::memory_order_release);
+        return true;
+    }
+
+    bool try_pop(T& out) noexcept
+    {
+        size_t tail = m_tail.load(std::memory_order_relaxed);
+        for (;;)
+        {
+            if (m_head.load(std::memory_order_relaxed) - tail <= 0)
+                return false;
+            if (m_tail.compare_exchange_strong(tail, tail + 1,
+                                               std::memory_order_relaxed,
+                                               std::memory_order_relaxed))
+                break;
+        }
+        auto& state = m_states[tail & MASK];
+        SlotState expected = SlotState::STORED;
+        while (!state.compare_exchange_strong(expected, SlotState::LOADING,
+                                              std::memory_order_acquire,
+                                              std::memory_order_relaxed))
+        {
+            while (state.load(std::memory_order_relaxed) != SlotState::STORED)
+                _mm_pause();
+            expected = SlotState::STORED;
+        }
+        out = std::move(m_slots[tail & MASK]);
+        state.store(SlotState::EMPTY, std::memory_order_release);
+        return true;
     }
 };
 ```
 
-**Why:** `acquire`/`release` establish happens-before relationships without the cost of `seq_cst`. `exchange` enables lock-free state transitions.
+**Why:** The per-slot state machine is the primitive behind bounded MPMC queues: producers and consumers claim positions with relaxed CAS, and the acquire/release slot transitions publish payload visibility without `seq_cst`. Each slot carries its own atomic state, so a producer and a consumer never touch the same transition.
 
-**Applies to:** Connection lifecycles, protocol state machines, thread coordination.
+**Applies to:** Order/message fan-in, shared-memory channels, any bounded concurrent handoff with a hard capacity ceiling.
 
 ---
 
@@ -287,32 +334,50 @@ send(err_msg);  // Always succeeds, even if make() failed
 
 ---
 
-## Atomic Exchange for Lock-Free State Transitions
+## SPSC Slot Handshake with Release Publish
 
-**Pattern:** Test-and-set with a single atomic operation.
+**Pattern:** Single-producer single-consumer ring where the producer fills a slot and publishes with a release store, and the consumer acquires before reading; the fast path is loads and stores only — no read-modify-write.
 
 ```cpp
-void Connection::close(CloseMode mode)
+// Requires: <atomic>, <cstddef>, <utility>
+
+template<class T, size_t CAPACITY>
+class SpscHandshakeRing
 {
-    // Only the first caller succeeds
-    if (state.exchange(ConnState::Closing, std::memory_order_acq_rel) 
-        == ConnState::Closing)
+    static_assert((CAPACITY & (CAPACITY - 1)) == 0, "capacity must be a power of two");
+    static constexpr size_t MASK = CAPACITY - 1;
+
+    alignas(64) std::atomic<size_t> m_writeIdx{0};
+    alignas(64) std::atomic<size_t> m_readIdx{0};
+    alignas(64) T m_slots[CAPACITY];
+
+public:
+    template<class U>
+    bool try_push(U&& value) noexcept
     {
-        LOG_DEBUG("Connection already closing, deferring");
-        return;
+        size_t const w = m_writeIdx.load(std::memory_order_relaxed);
+        if (w - m_readIdx.load(std::memory_order_acquire) >= CAPACITY)
+            return false;
+        m_slots[w & MASK] = std::forward<U>(value);
+        m_writeIdx.store(w + 1, std::memory_order_release);  // publish the fill
+        return true;
     }
-    
-    net::co_spawn(strand,
-        [self = shared_from_this(), mode]() -> net::awaitable<void>
-        {
-            co_await self->close_async(mode);
-        }, net::detached);
-}
+
+    bool try_pop(T& out) noexcept
+    {
+        size_t const r = m_readIdx.load(std::memory_order_relaxed);
+        if (m_writeIdx.load(std::memory_order_acquire) - r == 0)
+            return false;
+        out = std::move(m_slots[r & MASK]);
+        m_readIdx.store(r + 1, std::memory_order_release);   // hand the slot back
+        return true;
+    }
+};
 ```
 
-**Why:** `exchange` atomically reads and writes. No race between test and set. Idempotent operation — safe to call multiple times.
+**Why:** In SPSC, no atomic exchange is needed: the producer's release store after the slot write and the consumer's acquire load before the slot read are the entire handshake. This is the zero-RMW fast path that MPMC generalizes with CAS.
 
-**Applies to:** Connection teardown, resource cleanup, one-shot initialization.
+**Applies to:** Market-data fan-out, order IPC rings, any one-writer/one-reader boundary with a capacity bound.
 
 ---
 
@@ -355,46 +420,66 @@ std::expected<AuthManager, std::string> AuthManager::create(
 
 ---
 
-## Thread Pool with `packaged_task` Submission
+## Thread-Per-Role Topology with Pinned Workers
 
-**Pattern:** Submit work to a thread pool and receive results via `std::expected` + `std::packaged_task`.
+**Pattern:** Replace generic task pools on latency-critical paths with dedicated threads per role, each pinned once at startup, draining a bounded batch queue and sleeping with bounded backoff when idle.
 
 ```cpp
-class ThreadPool
+// Requires: <atomic>, <functional>, <list>, <mutex>, <thread>
+
+class PinnedRoleWorker
 {
 public:
-    template<class Fn>
-    auto submit(Fn&& fn) -> std::expected<std::invoke_result_t<Fn>, std::string>
+    PinnedRoleWorker(int cpu, std::function<void()> on_batch)
+        : m_cpu(cpu), m_on_batch(std::move(on_batch)) {}
+
+    void start()
     {
-        using Ret = std::invoke_result_t<Fn>;
-        
-        if (!running.load(std::memory_order_acquire))
-            return std::unexpected("ThreadPool stopped");
-        
-        std::packaged_task<Ret()> task(std::forward<Fn>(fn));
-        auto fut = task.get_future();
-        
-        net::post(pool_exec, 
-            [t = std::make_shared<std::packaged_task<Ret()>>(std::move(task))] { 
-                std::invoke(*t); 
-            });
-        
-        return fut.get();
+        m_thread = std::jthread([this] { run(); });
+    }
+
+    void post(std::function<void()> task)
+    {
+        std::lock_guard lock(m_mutex);
+        if (m_tasks.size() < kMaxBatched)          // bounded, deterministic backlog
+            m_tasks.push_back(std::move(task));
     }
 
 private:
-    net::io_context pool_ctx;
-    net::executor_work_guard<net::io_context::executor_type> work_guard;
-    std::vector<std::jthread> workers;
+    void run()
+    {
+        pin_current_thread(m_cpu);                 // affinity set once, inside the thread
+        for (;;)
+        {
+            std::list<std::function<void()>> batch;
+            {
+                std::lock_guard lock(m_mutex);
+                batch.swap(m_tasks);               // drain the whole backlog in one batch
+            }
+            if (batch.empty())
+            {
+                std::this_thread::sleep_for(kIdleBackoff);   // bounded, not a busy spin
+                continue;
+            }
+            for (auto& task : batch)
+                std::invoke(m_on_batch, task);
+        }
+    }
+
+    static constexpr size_t kMaxBatched = 1024;
+    static constexpr auto kIdleBackoff = std::chrono::microseconds(50);
+
+    int m_cpu;
+    std::function<void()> m_on_batch;
+    std::mutex m_mutex;
+    std::list<std::function<void()>> m_tasks;
+    std::jthread m_thread;
 };
 ```
 
-**Why:**
-- `packaged_task` bridges functors and futures — enables any callable to return a value asynchronously.
-- `shared_ptr` capture ensures the task outlives the lambda until execution.
-- `std::expected` wrapper handles both executor errors (pool stopped) and task exceptions.
+**Why:** A generic pool with `packaged_task` and futures pays per-task heap allocation, unbounded queues, and unpredictable scheduling. Role-dedicated pinned threads make the data path deterministic: one role per core, affinity set at thread start, batches amortize queue work, and idle sleep bounds CPU burn.
 
-**Applies to:** CPU-bound work offloading, parallel algorithms, async task systems.
+**Applies to:** Market-data receive, order routing, position reconciliation — any role where determinism matters more than generic load balancing.
 
 ---
 
@@ -438,39 +523,38 @@ private:
 
 ---
 
-## Atomic Failure Tracker with Threshold
+## Edge-Triggered Threshold Alerting
 
-**Pattern:** Self-contained atomic counter with configurable threshold for failure-based circuit breaking.
+**Pattern:** Fire an alert on the rising edge of a threshold crossing, latch until the condition recovers, and never re-fire while the condition persists.
 
 ```cpp
-struct FailureTracker
+// Requires: <cstdint>
+
+class EdgeTriggeredAlert
 {
-    const size_t max_failures = 5;
-    std::atomic<size_t> count{0};
-    
-    explicit FailureTracker(size_t max_fail = 5) : max_failures(max_fail) {}
-    
-    [[nodiscard("Returns whether threshold exceeded after increment")]]
-    bool record()
+public:
+    explicit EdgeTriggeredAlert(double limit) : m_limit(limit) {}
+
+    // Returns true only on the transition into the alert state.
+    bool update(double value) noexcept
     {
-        return count.fetch_add(1, std::memory_order_acq_rel) + 1 >= max_failures;
+        bool const triggered = value >= m_limit;
+        bool const fire = triggered && !m_latched;
+        m_latched = triggered;
+        return fire;
     }
 
-    void reset() { count.store(0, std::memory_order_release); }
-    
-    [[nodiscard]] bool threshold_exceeded() const 
-    { 
-        return count.load(std::memory_order_acquire) >= max_failures; 
-    }
+    void reset() noexcept { m_latched = false; }
+
+private:
+    double m_limit;
+    bool   m_latched = false;
 };
 ```
 
-**Why:**
-- Thread-safe failure counting without external synchronization.
-- `fetch_add` returns previous value — atomic read-modify-write in one operation.
-- `[[nodiscard]]` on `record()` forces callers to handle threshold result.
+**Why:** A level-triggered check (`if (value >= limit) alert();`) fires on every poll while the condition holds, flooding the risk or operations path. Edge triggering reports each crossing exactly once and latches until recovery, which suits per-duration rate limits, cancel-ratio limits, and circuit breakers.
 
-**Applies to:** Rate limiting, circuit breakers, retry logic, authentication lockouts.
+**Applies to:** Risk limits, rate/cancel-ratio thresholds, stop-loss monitoring, alert deduplication.
 
 ---
 
@@ -714,18 +798,18 @@ Level parse_level(std::string_view lvl)
 |---------|--------------|-----------------|
 | `shared_from_this` capture | C++11 | Lifetime safety |
 | Awaitable races | C++20 | Clean async composition |
-| Atomic state machine | C++11 | Lock-free synchronization |
+| MPMC slot state machine | C++11 | Bounded lock-free handoff |
 | Secure memory clearing | C++11 | Security hardening |
 | Pimpl + `unique_ptr` | C++11 | Encapsulation |
 | `std::expected` | C++23 | Explicit error handling |
 | Strand dispatch | C++20 | Ordered async execution |
 | Ranges pipeline | C++23 | Composable transformations |
 | `value_or` fallback | C++17 | Resilience |
-| Atomic exchange | C++11 | Lock-free state transitions |
+| SPSC slot handshake | C++11 | Zero-RMW producer/consumer publish |
 | `std::expected` factory | C++23 | Fallible construction |
-| Thread pool submission | C++20 | Async CPU work |
+| Thread-per-role topology | C++20 | Deterministic pinned workers |
 | Weak pointer registry | C++11 | Non-owning observation |
-| Atomic failure tracker | C++11 | Circuit breaking |
+| Edge-triggered alerting | C++11 | Alert deduplication |
 | `std::formatter` spec | C++23 | Type-safe formatting |
 | `optional` lazy init | C++17 | Deferred construction |
 | Enum class state machine | C++11 | Type-safe states |
@@ -736,4 +820,4 @@ Level parse_level(std::string_view lvl)
 
 ---
 
-*Source: TiaoMeng codebase — https://github.com/CrystalJiang232/TiaoMeng*
+*Production-derived; patterns generalized from high-frequency trading infrastructure.*

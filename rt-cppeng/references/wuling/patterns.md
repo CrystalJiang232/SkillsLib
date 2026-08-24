@@ -263,6 +263,96 @@ if( pInstrument->ProductClass == YD_PC_Options ) { std::memcpy( strHint, pInstru
 
 ---
 
+### Pattern: Single-Slot Handler Allocator
+
+**Context:** Async frameworks (asio-style) allocate temporary handler state per asynchronous operation on connection hot paths.
+
+**Problem:** One heap allocation per handler/event on the hot path fragments memory and adds latency.
+
+**Solution:** Reuse one preallocated slot per connection for the next handler; when the slot is busy, fall back to the global heap so the design stays correct under concurrency.
+
+```cpp
+class HandlerAllocator
+{
+public:
+    void* allocate( size_t size )
+    {
+        if( !m_inUse && size <= sizeof( m_storage ) )
+        {
+            m_inUse = true;
+            return &m_storage;
+        }
+        return ::operator new( size );
+    }
+
+    void deallocate( void* ptr ) noexcept
+    {
+        if( ptr == &m_storage )
+            m_inUse = false;
+        else
+            ::operator delete( ptr );
+    }
+
+private:
+    alignas( std::max_align_t ) std::byte m_storage[1024];
+    bool m_inUse = false;
+};
+```
+
+**Implementation notes:**
+- The framework guarantees deallocation occurs before the next handler in the chain runs, so the slot is ready for reuse (asio allocation contract).
+- A shared allocator across concurrent operations must be thread-safe; per-connection instances avoid that requirement.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Huge-Page Shared-Memory Buffer
+
+**Context:** Large cross-process buffers (market-data rings, persistence areas) in the hundreds of MB.
+
+**Problem:** 4K pages multiply TLB misses on every ring walk and add page-fault cost during warm-up.
+
+**Solution:** Allocate the shared segment with `shmget(..., SHM_HUGETLB)` and fall back to plain shared memory when huge pages are unavailable; size the reservation via `vm.nr_hugepages`.
+
+```cpp
+int id = shmget( key, size, IPC_CREAT | IPC_EXCL | SHM_HUGETLB | 0777 );
+if( id == -1 )
+    id = shmget( key, size, IPC_CREAT | IPC_EXCL | 0777 ); // fallback
+```
+
+**Implementation notes:**
+- Verify `HugePages_Total`/`HugePages_Free` before counting on the huge-page path; reservation is boot-time or sysctl-driven.
+- Preallocate large buffer pools off the hot path; allocating many multi-MB buffers can take seconds.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Bit-Packed Composite Identifiers
+
+**Context:** Hot-path keys that carry multiple fields (order ref + strategy id; instrument code).
+
+**Problem:** Composite string keys or multi-field structs compared field-by-field cost allocation, hashing, and cache space.
+
+**Solution:** Pack the fields into one integer at the boundary and extract with shifts/masks; the key is passed by value and compared with a single integer compare.
+
+```cpp
+inline int64_t packOrderRef( int32_t ref, int strategyId ) noexcept
+{
+    return ( int64_t( ref ) << Log2MaxStrategy ) | strategyId;
+}
+inline int getStrategyIdFromOrderRef( int64_t ref ) noexcept
+{
+    return int( ref & MaxStrategyId );
+}
+```
+
+**Implementation notes:**
+- Reserve enough high bits for the ref space and low bits for the id space; `static_assert` the ranges at compile time.
+- Decode once at the boundary (ingest/init); the hot path never touches text.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
 ## 火灵·朱雀 — Lock-free & Concurrency (炎上)
 
 ### Pattern: Lock-Free Queue (SPSC)
@@ -350,6 +440,31 @@ class MsgQueue {
 **Implementation notes:**
 - A bounded ring bounds queuing delay and memory under backpressure; full-queue behavior must be designed (reject or backpressure).
 - The replaced unbounded design is preserved under `#if 0` as migration documentation.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Variable-Length Ring with Fill-Block Wrap
+
+**Context:** Fixed-capacity rings carrying variable-length records (log messages, IPC frames) with one writer.
+
+**Problem:** Variable-length records either force a max-size slot (wasted space) or require splitting across the wrap boundary (copy).
+
+**Solution:** Reserve a zero-length "fill block" at the cycle end: the writer places a header with `size == 0` and restarts at position 0; the reader skips the marker.
+
+```cpp
+if( allocBlock >= m_freeBlock && tail != 0 )
+{
+    m_data[m_head].Type = 0;
+    m_data[m_head].Size = 0; // fill block: "nothing here, restart at 0"
+    m_head = 0;
+    m_freeBlock = tail;
+}
+```
+
+**Implementation notes:**
+- The reader must treat `size == 0` as "skip to the start", not as a zero-length message.
+- Combined with write-then-commit cursor publishing, the hot path stays allocation-free.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ---
@@ -754,6 +869,7 @@ while( pos - start < len ) {
 
 **Implementation notes:**
 - A single type+length header makes framing trivial and version-tolerant.
+- Validate every frame before decoding: reject a length that exceeds the remaining buffer and copy at most `min(available, expected)` bytes for untrusted input (bounded unpack).
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ### Pattern: TCP Heartbeat Echo + Idle Reaping
@@ -1013,6 +1129,33 @@ uint64_t ticks = clock::read_tsc(); // lfence; rdtsc; lfence
 - `clock_gettime(CLOCK_MONOTONIC)` is exported through the vDSO on Linux — a function call plus a few memory accesses, not a syscall — but still costs more than a raw RDTSC.
 - RDTSC counts reference cycles, not core cycles; tick-to-ns conversion is only stable with a pinned core and controlled frequency behavior.
 - Reserve `CLOCK_REALTIME` for wall-clock display; never use it for latency deltas.
+- Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Deferred-Formatting Log Pipeline
+
+**Context:** Logging on or near the hot path where formatting and I/O add latency.
+
+**Problem:** Formatting in the caller thread (and synchronous I/O) turns every log call into a latency spike; locks around a shared sink serialize producers.
+
+**Solution:** Two-stage logging: the hot path captures binary records (timestamp + packed args) into a thread-local ring and registers each call site's format string once; a dedicated consumer thread merges per-thread queues in timestamp order, formats, and writes off the path.
+
+```cpp
+// Producer hot path (per thread):
+auto* msg = buffer.allocate( sizeof( Timestamp ) + calculateSize( args... ) );
+msg->Type = logID; // static info registered once per call site
+*(Timestamp*)msg->Content = read_ns();
+pack( msg->Content + sizeof( Timestamp ), args... );
+buffer.writeCommit();
+
+// Consumer thread: min-heap over per-thread queues by head timestamp,
+// then format + sink outside the producer path.
+```
+
+**Implementation notes:**
+- Per-thread rings mean no lock on the logging fast path; the consumer drains each buffer in FIFO order and rebalances global order by timestamp.
+- Preallocate buffer pools at startup; large per-thread buffers cost seconds to allocate.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ---

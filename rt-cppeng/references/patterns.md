@@ -4,35 +4,73 @@ Error patterns, analysis, and brief solutions for Modern C++ code review.
 
 ---
 
-## String View in Concurrent Contexts
+## Fixed-Size Instrument Codes for Concurrent Hot Paths
 
-### `string_view` for map keys in multi-threaded code [?]
-**Problem:** `std::string_view` is non-owning and its validity depends on the lifetime of the source string. In concurrent contexts, using `string_view` for keys that will be stored in containers can lead to lifetime issues if the source string is modified or destroyed by another thread.
+### String keys in concurrent hot paths [R]
+**Problem:** String keys (`std::string`/`std::string_view`) in shared maps cost allocation, hashing, and lifetime discipline; a `string_view` key dangles if the source mutates, and a stored `std::string` key allocates on the hot path.
 
-**Real-world insight:** When inserting into `std::unordered_map<std::string, T>`, the key must be constructed as `std::string` anyway. Passing `std::string_view` as the insert parameter provides no benefit—the `std::string` constructor will be called internally. The compiler can often optimize the copy to near zero-cost when the source is already a compatible string type.
+**Real-world insight:** Production trading systems pack instrument codes and composite identifiers into fixed-size integers: text is decoded once at startup into a compact ID, and hot-path lookups use the integer by value — no allocation, no lifetime coupling, no per-access hashing of variable-length text.
 
-**Additional consideration:** Thread safety. If the source string (behind a `string_view`) is mutable and accessible by other threads, the `string_view` could dangle if that string is modified. Using `std::string` by value ensures the key is owned and stable regardless of external modifications.
+```cpp
+// Decode once at the boundary: "IC2409" -> packed integer id (fixed-size, by value).
+constexpr uint32_t pack_instrument_code(std::string_view code) noexcept
+{
+    uint32_t id = 0;
+    for (char c : code)
+        id = id * 37 + static_cast<uint32_t>(c); // illustrative fixed-width encoding
+    return id;
+}
 
-**When to use `string_view` for map operations:**
-- Lookup operations (`find`, `contains`) where the key is not stored
-- When the source is guaranteed immutable and the operation is read-only
-- Single-threaded contexts where lifetime is clearly controlled
+// Composite order id: (orderRef << k) | strategyId — extract with a mask, no division.
+inline int64_t pack_order_ref(int32_t ref, int strategy_id) noexcept
+{
+    return (static_cast<int64_t>(ref) << 8) | strategy_id;
+}
+inline int get_strategy_id(int64_t ref_with_strategy) noexcept
+{
+    return static_cast<int>(ref_with_strategy & 0xFF);
+}
+```
 
-**When to use `std::string` by value:**
-- Insert operations where the key will be stored
-- Multi-threaded contexts where the source string's lifetime is uncertain
-- When the API semantics require ownership transfer for correctness
+**When to keep `string_view`:**
+- Read-only lookups against an immutable, externally owned buffer (e.g., config text parsed once)
+- Single-threaded contexts where lifetime is trivially controlled
+- I/O boundaries where the text must be parsed anyway
+
+**When to switch to fixed-size IDs:**
+- The key crosses thread or process boundaries on a hot path
+- The key is looked up repeatedly (per order, per tick) and can be decoded once
+- The codebase already has a canonical ID space (instruments, strategies, users)
 
 ---
 
 ## Buffer Handling
 
-### Raw Pointer + Size [R]
-**Problem:** Unclear ownership, no compile-time size enforcement, error-prone length passing
+### Length-Prefixed Framing [R]
+**Problem:** Raw `(ptr, len)` messages carry no framing metadata: the parser cannot locate the next message, tolerate version drift, or validate bounds before decoding.
 ```cpp
 void process(const std::byte* data, std::size_t len);
 ```
-**Solution:** Use `std::span<Ty>` with const as needed
+**Solution:** Prefix every frame with a header carrying type and total length; decode through a bounded, length-checked walk and expose the payload as `std::span`:
+
+```cpp
+struct FrameHeader { std::uint32_t type; std::uint32_t length; };
+
+std::optional<std::span<const std::byte>> next_frame(
+    std::span<const std::byte> buffer, std::size_t& pos) noexcept
+{
+    if (buffer.size() - pos < sizeof(FrameHeader))
+        return std::nullopt;
+    const auto* hdr = reinterpret_cast<const FrameHeader*>(buffer.data() + pos);
+    if (hdr->length < sizeof(FrameHeader) || hdr->length > buffer.size() - pos)
+        return std::nullopt; // bounded: reject truncated or oversized frames
+    std::span<const std::byte> frame(buffer.data() + pos, hdr->length);
+    pos += hdr->length;
+    return frame;
+}
+```
+
+Length-checked decoding — copying at most `min(available, expected)` bytes and verifying sizes match — prevents truncated-input overreads and makes framing version-tolerant.
 
 ### Container-Specific References [R]
 **Problem:** Tied to specific container, cannot accept arrays or strings

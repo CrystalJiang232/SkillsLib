@@ -196,15 +196,49 @@ This is a design decision — the pattern itself is not wrong, but the intent mu
 
 ---
 
+### Example 4: Critical — Hot-Path Allocation Under a Contended Lock (Five Spirits calibration)
+
+**Input Code:**
+```cpp
+// File: src/market_data.cpp
+void on_quote(const Quote& q) {
+    std::lock_guard<std::mutex> lock(book_mutex);
+    book[q.symbol] = build_book(q);   // std::map + std::string key + allocation per tick
+}
+```
+
+**Analysis Output:**
+```markdown
+### Line 3 — Critical (hot path)
+**Current:**
+```cpp
+std::lock_guard<std::mutex> lock(book_mutex);
+book[q.symbol] = build_book(q);
+```
+
+**Rationale:**
+A mutex on the market-data receive path serializes every tick and introduces unbounded latency, while the `std::map`/`std::string` book allocates per update. In latency-critical systems this is a determinism break, not a style issue.
+
+**Guidance:**
+Verify the receive topology before amending:
+1. Is the book state confined to one pinned thread (thread-per-role), avoiding the lock entirely?
+2. Can the key be a fixed-size integer ID decoded once, and the book a fixed-size array?
+3. If sharing is unavoidable, is a bounded lock-free ring or per-symbol sharding the right handoff?
+
+Do not propose the fixed code until the topology is confirmed.
+```
+
+---
+
 ## Key Calibration Points from Examples
 
-| Aspect | Example 1 (Critical) | Example 2 (Recommended) | Example 3 (Consider) |
-|--------|---------------------|------------------------|----------------------|
-| **Severity** | [C] Bug risk, unsafe | [R] Clarity improvement | [?] Context-dependent |
-| **Tone** | Urgent, safety-focused | Suggestive, improvement-oriented | Neutral, exploratory |
-| **Guidance Depth** | Specific questions about ownership flow | Alternative approaches with conditions | Design intent verification |
-| **Code Amendment** | None — only questions | None — alternatives suggested | None — decision deferred to user |
-| **Assumption Level** | No assumptions — verify everything | Assume loop intent, verify applicability | Acknowledge pattern validity |
+| Aspect | Example 1 (Critical) | Example 2 (Recommended) | Example 3 (Consider) | Example 4 (Critical, hot path) |
+|--------|---------------------|------------------------|----------------------|-------------------------------|
+| **Severity** | [C] Bug risk, unsafe | [R] Clarity improvement | [?] Context-dependent | [C] Determinism/latency break |
+| **Tone** | Urgent, safety-focused | Suggestive, improvement-oriented | Neutral, exploratory | Urgent, performance-focused |
+| **Guidance Depth** | Specific questions about ownership flow | Alternative approaches with conditions | Design intent verification | Topology, key layout, and handoff questions |
+| **Code Amendment** | None — only questions | None — alternatives suggested | None — decision deferred to user | None — verify topology first |
+| **Assumption Level** | No assumptions — verify everything | Assume loop intent, verify applicability | Acknowledge pattern validity | Verify topology before amendments |
 
 ## Constraints
 
@@ -290,9 +324,9 @@ Review what operations are performed in the loop body. If simple element-wise pr
 | `references/cpp.md` | Code + documentation style contract (mandatory) | Read first before generating any output | Complete |
 | `references/patterns.md` | Modern C++ anti-pattern catalog (C++11→23) | Per finding category | Complete |
 | `references/checklist.md` | Review checklist by C++ version | Review passes | Complete |
-| `references/flagship.md` | Production-ready example code | Calibration / examples | Partial |
+| `references/flagship.md` | Production-ready example code | Calibration / examples | Updated — Round B production-derived replacements |
 | `references/checklist-hft.md` | 五灵 HFT checklist | HFT chamber active | Partial |
-| `references/wuling/` | 五灵 hidden chamber (index, patterns, checklist, flagship) | Trigger: `五灵应象决` or HFT context | Pass 1–3 + B-task + 水灵 rounds complete; flagship rounds 1–2 complete |
+| `references/wuling/` | 五灵 hidden chamber (index, patterns, checklist, flagship) | Trigger: `五灵应象决` or HFT context | Pass 1–3 + B-task + 水灵 rounds complete; flagship rounds 1–2 complete; Round B scan patterns folded |
 | `interchange/language-style-guide.md` | Optional style sidelane (clang-format complement) | Optional | Sanitized; integration pending |
 
 ## Severity Levels (with Priority Annotations)
@@ -338,9 +372,9 @@ HFT (High-Frequency Trading) and systems optimization archive — a hidden chamb
 | **金灵·白虎** | 肃杀 | Kernel & Bypass | PREEMPT_RT, DPDK, RDMA/RoCE, eBPF/XDP, kernel bypass |
 | **水灵·玄武** | 润下 | Observability & Profiling | perf, eBPF tracing, flame graphs, RDTSC timing, low-overhead probes |
 
-**Status**: Framework fixed; index in place; pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B), the B-task (kernel bypass / network stack tuning), and the 水灵 profiling round folded into `references/wuling/patterns.md` + `checklist.md`; flagship rounds 1–2 committed.
+**Status**: Framework fixed; index in place; pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B), the B-task (kernel bypass / network stack tuning), and the 水灵 profiling round folded into `references/wuling/patterns.md` + `checklist.md`; flagship rounds 1–2 committed; Round B (2026-08-24) folded web-verified scan patterns and replaced generic flagship examples with production-derived ones.
 - **Quick checklist** → `references/checklist-hft.md` (isolation, lock-free, latency, kernel dimensions)
-- **Pending**: concrete thresholds (venue/broker input), a full profiling-tool quick reference, venue checklists, example replacement candidates from the production codebase (scope expansion), and the standalone-skill split — designated growth areas
+- **Pending**: concrete thresholds (venue/broker input), a full profiling-tool quick reference, venue checklists, and the standalone-skill split — designated growth areas
 
 ---
 

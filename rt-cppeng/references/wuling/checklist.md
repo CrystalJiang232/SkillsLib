@@ -40,6 +40,10 @@
 - [ ] Bounded response batching (pack-until-full) [P1]
 - [ ] Fixed-index position accounting (no maps on fill path) [P1]
 - [ ] Fixed-size hint buffers [P2]
+- [ ] Fixed-array price book instead of `std::map` on the hot path [P1]
+- [ ] Single-slot handler allocator reuse for async handlers [P1]
+- [ ] Bit-packed fixed-size identifiers (no string keys on the hot path) [P1]
+- [ ] Huge pages for large shared buffers (`SHM_HUGETLB` with fallback) [P2]
 
 ---
 
@@ -56,6 +60,7 @@
 - [ ] Bounded/exponential backoff on contended spins [P2]
 - [ ] Fair vs unfair spinlock chosen deliberately (latency vs starvation) [P2]
 - [ ] Bounded fixed-size ring (deterministic queueing delay) [P1]
+- [ ] Variable-length ring with fill-block wrap (zero-copy cycle restart) [P2]
 - [ ] Direct-call dispatch where producer/consumer share the thread [P1]
 - [ ] variant/visitor or index-switch dispatch (no vtable) [P2]
 - [ ] CRTP message handlers (static dispatch) [P1]
@@ -92,6 +97,7 @@
 - [ ] Zero-copy data paths where applicable [P1]
 - [ ] Shared-memory ring IPC channels (zero-copy, same-host) [P1]
 - [ ] Length-prefixed framing for replay/parsing [P1]
+- [ ] Length-checked bounded unpack for external/truncated input [P1]
 - [ ] TCP heartbeat echo + idle reaping [P1]
 - [ ] Shared-memory risk-limit push [P1]
 - [ ] Busy poll configured where driver-supported (`net.core.busy_poll`/`busy_read`, `SO_BUSY_POLL`) [P2]
@@ -108,9 +114,11 @@
 - [ ] Latency measurement with hardware timestamps [P1]
 - [ ] Sampling-based profiling with bounded overhead [P1]
 - [ ] Per-order segment latency instrumentation (staged stamps) [P1]
+- [ ] Ingest timestamp with steady_clock at the first receive boundary [P1]
 - [ ] CLOCK_MONOTONIC for latency deltas (not REALTIME) [P1]
 - [ ] RDTSC usage verified: pinned core, turbo controlled, lfence [P2]
 - [ ] Catch-up gating for notification pipelines [P1]
+- [ ] Deferred-formatting log pipeline (thread-local capture, background consumer) [P1]
 - [ ] Edge-triggered threshold alerts [P2]
 - [ ] Latency distribution measured via percentiles/histograms (p50/p99/p999), not averages [P1]
 
