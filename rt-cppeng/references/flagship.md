@@ -312,25 +312,27 @@ auto payload = *encrypted
 
 ---
 
-## Graceful Degradation with `value_or`
+## Graceful Degradation on External Input
 
-**Pattern:** Pre-computed fallback for failure cases.
+**Pattern:** Decode untrusted input with per-field defaults and invalid-value guards — a missing or out-of-range field degrades to a safe sentinel instead of failing the path.
 
 ```cpp
-static const Msg decay_msg = *msg::make(
-    bytes::to_bytes("Unknown error"), 
-    plaintext_error
-);
-
-auto err_msg = msg::make(bytes::to_bytes(err), plaintext_error)
-    .value_or(decay_msg);
-
-send(err_msg);  // Always succeeds, even if make() failed
+// Untrusted input must not fail the path: missing fields degrade to safe
+// sentinels, and out-of-range enums snap to Invalid. No exception path.
+msg.CancelCount       = j.value( "CancelCount", -1 );
+msg.TodayOpenPosition = j.value( "TodayOpenPosition", -1 );
+msg.ModifiedRiskControlFlag = static_cast<RiskControlFlagType>(
+    j.value( "ModifiedRiskControlFlag", RiskControlFlagType::RCF_Invalid ) );
+if( msg.ModifiedRiskControlFlag >= RiskControlFlagType::RCF_MAX ||
+    msg.ModifiedRiskControlFlag < RiskControlFlagType::RCF_Invalid )
+{
+    msg.ModifiedRiskControlFlag = RiskControlFlagType::RCF_Invalid;
+}
 ```
 
-**Why:** Network servers must be resilient. Even error-message construction can fail — have a fallback ready.
+**Why:** Decoding external input must not be able to fail the consuming path. Per-field defaults express "absent is safe", and the explicit range guard catches out-of-range or legacy values before they reach the hot path.
 
-**Applies to:** Error handling, logging, telemetry (must-not-fail operations).
+**Applies to:** Wire/JSON/config decoding, telemetry ingestion, admin-plane messages (must-not-fail operations).
 
 ---
 
@@ -592,37 +594,62 @@ std::string id = std::format("{}", sock);  // "192.168.1.1:54321"
 
 ---
 
-## `std::optional` for Lazy Member Initialization
+## `std::optional` for Absent Configuration Values
 
-**Pattern:** Use `std::optional` for members that are not valid at construction but become valid later.
+**Pattern:** Model absent or malformed external values with `std::optional`; strict parsers return `std::nullopt`, and setters keep the previous field value on failure.
 
 ```cpp
-class Connection
+// Absent or malformed values are std::nullopt; setters keep the previous
+// field value when parsing fails (graceful defaulting, no exceptions).
+std::optional<std::string> findValue( const ConfigValues&                values,
+                                      std::initializer_list<const char*> aliases )
 {
-    std::optional<crypto::Kyber768::keypair_t> kp;
-    std::optional<crypto::Kyber768::shared_secret_t> ss_local;
-    std::optional<crypto::Kyber768::shared_secret_t> ss_remote;
-    std::optional<net::signal_set> signals;
-    std::optional<auth::AuthManager> auth_mgr;
-    
-public:
-    void complete_handshake()
+    for( const char* alias : aliases )
     {
-        auto kp_result = kem.generate_keypair();
-        if (kp_result)
-            kp = std::move(*kp_result);  // Now valid
+        const auto iter = values.find( alias );
+        if( iter != values.end() )
+        {
+            return iter->second;
+        }
     }
-    
-    bool has_session_key() const { return sess.is_established(); }
-};
+
+    return std::nullopt;
+}
+
+template<typename ValueT>
+std::optional<ValueT> parseInteger( const std::string& value )
+{
+    int64_t parsed = 0;
+    if( !parseInt64( value, parsed ) ||
+        parsed < std::numeric_limits<ValueT>::min() ||
+        parsed > std::numeric_limits<ValueT>::max() )
+    {
+        return std::nullopt;
+    }
+
+    return static_cast<ValueT>( parsed );
+}
+
+void setInteger( const ConfigValues&                values,
+                 std::initializer_list<const char*> aliases,
+                 int&                               field )
+{
+    if( const auto value = findValue( values, aliases ) )
+    {
+        if( const auto parsed = parseInteger<int>( *value ) )
+        {
+            field = *parsed;
+        }
+    }
+}
 ```
 
 **Why:**
-- Expresses "may not exist yet" in the type system — no null pointers or sentinel values.
-- Destructor automatically handles cleanup when `optional` is reset or destroyed.
-- Clearer than raw pointers with manual lifetime management.
+- Absence and malformed input are first-class: `std::nullopt` means "no usable value" — never a sentinel and never a thrown exception.
+- Strict range validation happens at the boundary; a failed parse leaves the previous field value intact instead of corrupting state.
+- No null pointers or magic defaults scattered through callers.
 
-**Applies to:** Handshake state, deferred initialization, protocol state machines.
+**Applies to:** Configuration parsing, API option lookup, any boundary where a value may be absent or invalid.
 
 ---
 
@@ -674,29 +701,63 @@ public:
 
 ## RAII Wrapper for C Library Handles
 
-**Pattern:** Use `std::unique_ptr` with custom deleter to manage C library resources (OpenSSL, liboqs, libsodium).
+**Pattern:** Own OS resources with a class whose constructor acquires and whose destructor releases through a member owner — use sites never call free/unmap manually. `unique_ptr` with a custom deleter remains the right tool for C API init/free pairs; class-based RAII fits resources with richer state.
 
 ```cpp
-class Kyber768
+class SharedMemBuffer
 {
-    std::unique_ptr<OQS_KEM, decltype(&OQS_KEM_free)> kem;
+    struct Header
+    {
+        std::atomic<size_t> writePos{ 0 };
+        size_t              size;
+    };
 
 public:
-    Kyber768()
-        : kem(OQS_KEM_new("Kyber768"), OQS_KEM_free)
+    explicit SharedMemBuffer( const std::string& name,
+                              size_t             size,
+                              bool               writer,
+                              bool               create )
+        : m_mmap( name,
+                  roundToPow2( size ) + sizeof( Header ) + kSafeRemain,
+                  writer,
+                  create,
+                  /*wait=*/true )
+        , m_header( reinterpret_cast<Header*>( m_mmap.addr() ) )
     {
-        if (!kem)
-            throw std::runtime_error("Kyber768 not available");
     }
+
+    // The destructor releases the kernel resource through the m_mmap member;
+    // use sites never call free/unmap manually.
+
+    void* getWriteBuffer() noexcept
+    {
+        return bytes() + m_header->writePos.load( std::memory_order_relaxed );
+    }
+
+    size_t updateWritePos( size_t len ) noexcept
+    {
+        const size_t pos = m_header->writePos.load( std::memory_order_relaxed );
+        if( pos >= m_bufferSize )
+        {
+            return 0; // explicit bounds clamp instead of a silent wrap
+        }
+        m_header->writePos.store( pos + len, std::memory_order_release ); // publish
+        return len;
+    }
+
+private:
+    MmapResource m_mmap;      // RAII owner of the kernel resource
+    Header*      m_header;
+    size_t       m_bufferSize;
 };
 ```
 
 **Why:**
-- C libraries require explicit cleanup. `unique_ptr` with custom deleter ensures cleanup even on early returns/exceptions.
-- Prevents resource leaks in error-heavy code.
-- `decltype(&deleter_func)` captures the function pointer type automatically.
+- The resource is acquired in the constructor and released by the member's destructor — cleanup happens even on early returns and exceptions.
+- Cursors shared across processes are `std::atomic` with a release-store publish, and bounds are checked explicitly rather than clamped silently.
+- The owning member keeps the acquire/release pairing in one place instead of at every use site.
 
-**Applies to:** OpenSSL contexts, database handles, file descriptors, any C API with init/free pairs.
+**Applies to:** Shared-memory regions, file mappings, descriptors, any OS resource with acquire/release semantics.
 
 ---
 
@@ -730,65 +791,71 @@ shared_secret_t combine_secrets(
 
 ## Constraint Validation with Structured Reporting
 
-**Pattern:** Validate multiple constraints and return detailed failure reports.
+**Pattern:** Validate constraints at the boundary and return `std::nullopt` on pass or a structured one-string report on violation.
 
 ```cpp
-std::expected<void, std::string> check_password(std::string_view password, std::string_view ref_username)
+// Pass = std::nullopt; violation = structured one-string report with the
+// instrument, current value, and threshold.
+std::optional<std::string> checkSelfTrade( const Trade*      trade,
+                                           const Instrument* inst )
 {
-    std::vector<std::pair<std::string, bool>> cons
+    if( !trade || !inst )
     {
-        {"Minimum length: 8 characters", password.size() >= 8},
-        {"At least three character types", count_chart_fn(password) >= 3},
-        {"Does not contain username", !password.contains(ref_username)}
-    };
-
-    std::string ret;
-    bool pass = true;
-    for(auto&& [s, b] : cons)
-    {
-        ret += std::format("[{}] {}\n", b ? "√" : "×", s);
-        pass &= b;
+        return std::nullopt;
     }
 
-    if(!pass)
-        return std::unexpected(ret);
-    return {};
+    const std::string hint = instrumentHint( inst );
+    if( hint.empty() )
+    {
+        return std::nullopt;
+    }
+
+    // ... per-instrument risk state accumulates here ...
+    if( selfTradeVolume >= maxSelfTrade )
+    {
+        return std::format(
+            "=== self-trade ===\n"
+            "[InstrumentID: {}]\n"
+            "[Current SelfTrade Volume: {}]\n"
+            "[Max: {}]",
+            inst->id,
+            selfTradeVolume,
+            maxSelfTrade );
+    }
+
+    return std::nullopt;
 }
 ```
 
 **Why:**
-- Collects all validation results before failing — users see all issues at once.
-- Structured output with checkmarks/crosses improves UX.
-- Lambda encapsulates complex validation logic cleanly.
+- `std::optional<std::string>` encodes both outcomes in the type: no value means pass, an engaged string is the full violation report.
+- The report carries the entity, current value, and threshold, so callers can act on the reason without re-deriving state.
+- The pass path stays allocation-light; report building happens only on violation.
 
-**Applies to:** Form validation, configuration validation, password policies, input sanitization.
+**Applies to:** Risk gates, rate/ratio limits, config and input validation where the caller needs the reason, not just a boolean.
 
 ---
 
-## Case-Insensitive String Comparison with Ranges
+## Case-Insensitive String Comparison with Whitelist Lookup
 
-**Pattern:** Transform string to lowercase for case-insensitive comparison.
+**Pattern:** Normalize the input once with `toupper`/`tolower`, then compare or look it up in a set.
 
 ```cpp
-Level parse_level(std::string_view lvl)
+// Whitelist lookup: normalize once, then O(1) set lookup.
+std::string upperMac( mac );
+for( auto& ch : upperMac )
 {
-    std::string lstr = lvl 
-        | std::views::transform([](auto c) -> char { return std::tolower(c); }) 
-        | std::ranges::to<std::string>();
-
-    if (lstr == "debug") return Level::Debug;
-    if (lstr == "warn") return Level::Warn;
-    if (lstr == "error") return Level::Error;
-    return Level::Info;
+    ch = static_cast<char>( std::toupper( static_cast<unsigned char>( ch ) ) );
 }
+const bool allowed = config.getMacList().count( upperMac ) > 0;
 ```
 
 **Why:**
-- Ranges pipeline is declarative and composable.
-- Explicit `-> char` return type prevents `std::tolower` overload ambiguity.
-- Allocates once — acceptable for non-hot paths (configuration parsing).
+- One normalization pass turns a case-insensitive comparison into a single set lookup instead of repeated string compares.
+- The `unsigned char` cast keeps `toupper` well-defined for all byte values.
+- Ranges pipelines remain the declarative choice where the codebase already uses them; the loop form is the same one-allocation cost without the pipeline machinery.
 
-**Applies to:** Configuration parsing, command-line arguments, case-insensitive lookups.
+**Applies to:** Whitelists (MAC/IP/user lists), login checks, case-insensitive lookups on non-hot paths.
 
 ---
 
@@ -804,19 +871,19 @@ Level parse_level(std::string_view lvl)
 | `std::expected` | C++23 | Explicit error handling |
 | Strand dispatch | C++20 | Ordered async execution |
 | Ranges pipeline | C++23 | Composable transformations |
-| `value_or` fallback | C++17 | Resilience |
+| Defaulted decode | C++17 | Resilience |
 | SPSC slot handshake | C++11 | Zero-RMW producer/consumer publish |
 | `std::expected` factory | C++23 | Fallible construction |
 | Thread-per-role topology | C++20 | Deterministic pinned workers |
 | Weak pointer registry | C++11 | Non-owning observation |
 | Edge-triggered alerting | C++11 | Alert deduplication |
 | `std::formatter` spec | C++23 | Type-safe formatting |
-| `optional` lazy init | C++17 | Deferred construction |
+| `optional` absent values | C++17 | Defensive parsing |
 | Enum class state machine | C++11 | Type-safe states |
-| RAII C library wrapper | C++11 | Resource safety |
+| RAII resource wrapper | C++11 | Resource safety |
 | Secret combination | C++20 | Key derivation |
-| Constraint validation | C++23 | Structured reporting |
-| Case-insensitive compare | C++20 | Ranges transform |
+| Constraint validation | C++17 | Structured reporting |
+| Case-insensitive compare | C++11 | Whitelist lookup |
 
 ---
 
