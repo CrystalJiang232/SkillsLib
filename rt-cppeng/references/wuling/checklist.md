@@ -2,9 +2,9 @@
 
 > 以五灵之名，应天地之象。此卷为 HFT 与高性能系统优化之速查。
 
-> Pass 1 additions (x2trader `atomic_queue/` + `CpuPinning.h`); [P2] items are Consider-level, context-dependent.
+> Pass 1 additions (`atomic_queue/` + `CpuPinning.h`); [P2] items are Consider-level, context-dependent.
 
-> Pass 2 additions (x2trader `core/` + `msg_parser`); [P2] items are Consider-level.
+> Pass 2 additions (`core/` + `msg_parser`); [P2] items are Consider-level.
 
 > Pass 3 additions (option B: qd_ipc_trader + counterfront + dropcopy). Level field: [P1] Recommended (high confidence) / [P2] Consider (medium or context-dependent).
 
@@ -44,6 +44,8 @@
 - [ ] Single-slot handler allocator reuse for async handlers [P1]
 - [ ] Bit-packed fixed-size identifiers (no string keys on the hot path) [P1]
 - [ ] Huge pages for large shared buffers (`SHM_HUGETLB` with fallback) [P2]
+- [ ] Shared cursors use atomics with acquire/release; `volatile` is not a synchronization primitive [P1]
+- [ ] Ring watermark/sequence guard against silent overwrite [P1]
 
 ---
 
@@ -98,6 +100,7 @@
 - [ ] Shared-memory ring IPC channels (zero-copy, same-host) [P1]
 - [ ] Length-prefixed framing for replay/parsing [P1]
 - [ ] Length-checked bounded unpack for external/truncated input [P1]
+- [ ] Batched multicast receive (`recvmmsg`) with drop counter (`SO_RXQ_OVFL`) [P2]
 - [ ] TCP heartbeat echo + idle reaping [P1]
 - [ ] Shared-memory risk-limit push [P1]
 - [ ] Busy poll configured where driver-supported (`net.core.busy_poll`/`busy_read`, `SO_BUSY_POLL`) [P2]

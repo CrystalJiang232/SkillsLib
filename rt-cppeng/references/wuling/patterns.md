@@ -2,9 +2,9 @@
 
 > 以五灵之名，应天地之象。此卷藏纳高频交易与高性能系统之优化模式。
 
-> Pass 1 (x2trader `atomic_queue/` + `CpuPinning.h`): distilled patterns below; verification references kept in-session, skill files dependency-free.
+> Pass 1 (`atomic_queue/` + `CpuPinning.h`): distilled patterns below; verification references kept in-session, skill files dependency-free.
 
-> Pass 2 (x2trader `core/` + `msg_parser`): production patterns for bounded queues, dispatch, IPC, and timing — added below.
+> Pass 2 (`core/` + `msg_parser`): production patterns for bounded queues, dispatch, IPC, and timing — added below.
 
 > Pass 3 (option B: qd_ipc_trader + x2counterfront + x2dropcopy): gateway, batching, partitioning, and monitoring patterns — added below.
 
@@ -573,7 +573,7 @@ std::unique_lock lock( instrData.getLock() );
 **Solution:** Each producer thread owns its own API instance; producers never share mutable state.
 
 ```cpp
-std::shared_ptr<Trader> trader( x2trader::X2TraderApi::CreateX2TraderApi( cfg, 0, index ), ... );
+std::shared_ptr<Trader> trader( TraderApi::CreateTraderApi( cfg, 0, index ), ... );
 trader->Run();
 while( !traderSPI.getTradeReady() ) { std::this_thread::sleep_for( std::chrono::seconds( 1 ) ); }
 ```
@@ -593,7 +593,7 @@ while( !traderSPI.getTradeReady() ) { std::this_thread::sleep_for( std::chrono::
 **Solution:** Collect order refs in a pre-reserved vector, dispatch all inserts, then run the cancel sweep.
 
 ```cpp
-std::vector<x2trader::OrderRefType> orderRefs;
+std::vector<OrderRefType> orderRefs;
 orderRefs.reserve( m_instrumentIDs.size() );
 for( auto id : m_instrumentIDs ) { m_order.InstrumentID = id; orderRefs.push_back( m_trader->ReqInsertOrder( &m_order ) ); }
 for( auto orderRef : orderRefs ) { if( orderRef > 0 && cfg.getIsLimitOrder() ) m_trader->ReqCancelOrder( orderRef ); }
@@ -847,6 +847,7 @@ std::make_unique<ShmChannel<ShmBuffer<ShmBase>, IpcMessageHandler, O_RDONLY>>( s
 **Implementation notes:**
 - Same-host zero-copy transport; latency is bounded by memory access plus the poll/sleep loop rather than the socket stack.
 - Requires explicit synchronization and crash/restart recovery (mount vs create semantics).
+- Publish cursors must be `std::atomic` with release/acquire handshakes; `volatile` cursors rely on x86 store ordering and are not portable. A watermark/sequence guard lets a lagging reader detect silent overwrite instead of reading stale slots.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ---
@@ -1160,6 +1161,38 @@ buffer.writeCommit();
 
 ---
 
+### Pattern: Jitter Measurement & Profiling Methods
+
+**Context:** Tail latency and jitter, not averages, determine trading-system quality.
+
+**Problem:** The mean hides heavy-tailed distributions, coarse sampling misses spikes, and unbudgeted instrumentation distorts the path it measures.
+
+**Solution:** Measure distributions, not averages: record percentiles (p50/p99/p999) and log-spaced histograms of segment deltas, and track jitter as the spread or variation of consecutive samples. Set budgets as percentile targets aligned to venue/broker SLAs, and bound sampling rates and instrumentation overhead.
+
+```cpp
+// Illustrative: log2-spaced histogram bucket for a delta in nanoseconds.
+// Accumulation happens off the hot path; resolution widens as delta grows.
+uint32_t logBucket( uint64_t deltaNs ) noexcept
+{
+    return deltaNs == 0 ? 0u : uint32_t( 64 - __builtin_clzll( deltaNs ) );
+}
+void record( uint64_t deltaNs ) noexcept
+{
+    uint32_t b = logBucket( deltaNs );
+    if( b < BUCKET_COUNT )
+        ++m_buckets[b];
+}
+```
+
+**Implementation notes:**
+- Report percentiles and the maximum alongside any mean; real latency distributions are heavy-tailed, and tail percentiles expose the risk averages hide.
+- Methodology only: numeric budgets must come from venue/broker requirements (per-venue SLAs); do not hard-code unverified targets.
+- Bound profiling overhead: frequency-limited sampling (`perf record -F`) and in-kernel eBPF aggregation (bcc/bpftrace) keep cost low; Intel VTune hardware event-based sampling has minimal collection overhead versus user-mode sampling. Flame graphs visualize sampled stacks for hot-path identification.
+- Verify instrumentation overhead with a null-run comparison against an uninstrumented baseline.
+- Severity: Recommended [P1] for the methodology; numeric budgets are venue/broker-specific and deferred.
+
+---
+
 ## Supplementary — Instruction-Level (Cross-Cutting)
 
 The patterns below are not bound to a single spirit; they apply across the hot path.
@@ -1229,38 +1262,6 @@ External verification performed per item; skill files stay dependency-free and t
 - [P1] **Idempotent event handling** — dedup sets keep repeated vendor notifications from corrupting state. Constraint: dedup set bounded for the notification volume.
 - [P2] **Static locals for instance state** — static vectors/flags in member functions are process-wide; prefer member state with multiple instances per process (design observation).
 - [P2] **Timer-throttled monitoring** — elapsed-time guards bound overhead; verify threshold intervals catch violations in time.
-
----
-
-### Pattern: Jitter Measurement & Profiling Methods
-
-**Context:** Tail latency and jitter, not averages, determine trading-system quality.
-
-**Problem:** The mean hides heavy-tailed distributions, coarse sampling misses spikes, and unbudgeted instrumentation distorts the path it measures.
-
-**Solution:** Measure distributions, not averages: record percentiles (p50/p99/p999) and log-spaced histograms of segment deltas, and track jitter as the spread or variation of consecutive samples. Set budgets as percentile targets aligned to venue/broker SLAs, and bound sampling rates and instrumentation overhead.
-
-```cpp
-// Illustrative: log2-spaced histogram bucket for a delta in nanoseconds.
-// Accumulation happens off the hot path; resolution widens as delta grows.
-uint32_t logBucket( uint64_t deltaNs ) noexcept
-{
-    return deltaNs == 0 ? 0u : uint32_t( 64 - __builtin_clzll( deltaNs ) );
-}
-void record( uint64_t deltaNs ) noexcept
-{
-    uint32_t b = logBucket( deltaNs );
-    if( b < BUCKET_COUNT )
-        ++m_buckets[b];
-}
-```
-
-**Implementation notes:**
-- Report percentiles and the maximum alongside any mean; real latency distributions are heavy-tailed, and tail percentiles expose the risk averages hide.
-- Methodology only: numeric budgets must come from venue/broker requirements (per-venue SLAs); do not hard-code unverified targets.
-- Bound profiling overhead: frequency-limited sampling (`perf record -F`) and in-kernel eBPF aggregation (bcc/bpftrace) keep cost low; Intel VTune hardware event-based sampling has minimal collection overhead versus user-mode sampling. Flame graphs visualize sampled stacks for hot-path identification.
-- Verify instrumentation overhead with a null-run comparison against an uninstrumented baseline.
-- Severity: Recommended [P1] for the methodology; numeric budgets are venue/broker-specific and deferred.
 
 ---
 
