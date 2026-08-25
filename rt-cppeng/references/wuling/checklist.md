@@ -124,6 +124,7 @@
 - [ ] Deferred-formatting log pipeline (thread-local capture, background consumer) [P1]
 - [ ] Edge-triggered threshold alerts [P2]
 - [ ] Latency distribution measured via percentiles/histograms (p50/p99/p999), not averages [P1]
+- [ ] Profiling/diagnostic tooling used per `prof-tools.md` (perf/eBPF/VTune/flame graphs; status commands) [P1]
 
 ---
 
@@ -136,40 +137,14 @@
 
 ---
 
-## Diagnostic Commands
-
-```bash
-# CPU topology and cache info
-lscpu && cat /proc/cpuinfo | grep -E "processor|physical id|core id"
-cat /sys/devices/system/cpu/cpu0/cache/index*/{size,type,level}
-
-# NUMA status
-numactl --hardware
-numastat -m
-
-# Interrupt distribution
-cat /proc/interrupts
-
-# Clock source
-cat /sys/devices/system/clocksource/clocksource0/available_clocksource
-cat /sys/devices/system/clocksource/clocksource0/current_clocksource
-
-# Kernel scheduler parameters
-cat /proc/sys/kernel/sched_*
-
-# Network stack tuning parameters
-cat /proc/sys/net/core/*
-cat /proc/sys/net/ipv4/tcp_*
-```
-
----
-
 ## Pending
 
 - [ ] Concrete thresholds (latency budgets, cache-miss targets) [P1]
-- [ ] Profiling tool quick reference (perf, eBPF, Intel VTune) [P1]
 - [ ] Venue/broker-specific deployment checklists [P1]
 
 ---
 
-*Pass 1–3 folded above; kernel-bypass evaluation, network-stack tuning, and 水灵 profiling rows added. Concrete thresholds, a full profiling-tool quick reference, and venue checklists remain pending — designated growth area.*
+*Pass 1–3 folded above; 水灵 profiling rows added. External tooling and status content
+(profiling quick reference, diagnostic commands, kernel-bypass evaluation, network-stack tuning,
+isolation/clock-source status) moved to `prof-tools.md` (2026-08-25). Concrete thresholds and
+venue checklists remain pending — designated growth area.*
