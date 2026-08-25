@@ -326,7 +326,7 @@ Review what operations are performed in the loop body. If simple element-wise pr
 | `references/checklist.md` | Review checklist by C++ version | Review passes | Complete |
 | `references/flagship.md` | Production-ready example code | Calibration / examples | Updated — Round B production-derived replacements |
 | `references/checklist-hft.md` | 五灵 HFT checklist | HFT chamber active | Partial |
-| `references/wuling/` | 五灵 hidden chamber (index, patterns, checklist, flagship, prof-tools) | Trigger: `五灵应象决` or HFT context | Pass 1–3 + B-task + 水灵 rounds complete; flagship rounds 1–2 complete; Round B scan patterns folded; prof-tools.md added (external tools/status, 2026-08-25) |
+| `references/wuling/` | 五灵 hidden chamber (index, patterns, checklist, flagship, prof-tools) | Trigger: `五灵应象决` or HFT context | Pass 1–3 + B-task + 水灵 rounds complete; flagship rounds 1–2 complete; Round B scan patterns folded; prof-tools.md added (external tools/status, 2026-08-25); refinement round 2026-08-25 (web cross-checked) |
 | `interchange/language-style-guide.md` | Optional style sidelane (clang-format complement) | Optional | Sanitized; integration pending |
 
 ## Severity Levels (with Priority Annotations)
@@ -372,7 +372,7 @@ HFT (High-Frequency Trading) and systems optimization archive — a hidden chamb
 | **金灵·白虎** | 肃杀 | Kernel & Bypass | PREEMPT_RT, DPDK, RDMA/RoCE, eBPF/XDP, kernel bypass |
 | **水灵·玄武** | 润下 | Observability & Profiling | perf, eBPF tracing, flame graphs, RDTSC timing, low-overhead probes |
 
-**Status**: Framework fixed; index in place; pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B), the B-task (kernel bypass / network stack tuning), and the 水灵 profiling round folded into `references/wuling/patterns.md` + `checklist.md`; flagship rounds 1–2 committed; Round B (2026-08-24) folded web-verified scan patterns and replaced generic flagship examples with production-derived ones; external tools & system status moved to `references/wuling/prof-tools.md` (2026-08-25).
+**Status**: Framework fixed; index in place; pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B), the B-task (kernel bypass / network stack tuning), and the 水灵 profiling round folded into `references/wuling/patterns.md` + `checklist.md`; flagship rounds 1–2 committed; Round B (2026-08-24) folded web-verified scan patterns and replaced generic flagship examples with production-derived ones; external tools & system status moved to `references/wuling/prof-tools.md` (2026-08-25); refinement round 2026-08-25 applied web-verified guidance (signal-safe dumps, receive-length, wire-struct ABI).
 - **Quick checklist** → `references/checklist-hft.md` (isolation, lock-free, latency, kernel dimensions)
 - **Pending**: concrete thresholds (venue/broker input), venue checklists, and the standalone-skill split — designated growth areas (profiling quick reference now in `references/wuling/prof-tools.md`)
 

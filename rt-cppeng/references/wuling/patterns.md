@@ -167,6 +167,7 @@ using TimeStampArrayType = std::array<StampPerOrderType, MaxSupportedOrders>;
 
 **Implementation notes:**
 - O(1) index addressing, no allocation, no hashing; stamps are zeroed after logging to avoid double-reporting.
+- Dump and log off the signal path: an asynchronous signal handler may only set a lock-free atomic or `volatile sig_atomic_t` flag; copying containers or calling loggers inside the handler is undefined behavior (POSIX async-signal-safety plus C++ static-storage rules). A worker thread performs the ring dump when the flag is set.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ### Pattern: Bounded Response Batching (Pack-Until-Full)
@@ -640,6 +641,7 @@ m_pThread = std::make_shared<std::thread>( [this]() { m_ioContext.run(); } );
 **Implementation notes:**
 - Precondition: downstream connection count is low; revisit with an io_context pool (or multiple io_contexts) when it grows.
 - Single-thread run avoids synchronization complexity and enables asio single-thread optimizations.
+- Reuse one fixed receive buffer across async receives and pass the received length to the decoder; a bare buffer pointer without a length silently truncates oversize frames.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ---
@@ -870,6 +872,7 @@ while( pos - start < len ) {
 **Implementation notes:**
 - A single type+length header makes framing trivial and version-tolerant.
 - Validate every frame before decoding: reject a length that exceeds the remaining buffer and copy at most `min(available, expected)` bytes for untrusted input (bounded unpack).
+- Fixed-layout wire structs: bit-field allocation and padding are implementation-defined — pin bit widths with explicit padding or unnamed zero-width fields and `static_assert(sizeof(...))` when the layout crosses an ABI boundary.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ### Pattern: TCP Heartbeat Echo + Idle Reaping
@@ -961,7 +964,7 @@ static uint64_t read() {
 ```
 
 **Implementation notes:**
-- rdtsc is not serializing: pair with lfence around the measured region for accurate fences.
+- rdtsc is not serializing: use `LFENCE; RDTSC` (or `RDTSCP` where available) around the measured region for accurate fences.
 - It counts reference cycles, not core cycles; ns conversion is only stable when the core is pinned and turbo behavior is controlled.
 - Severity: Consider [P2]; medium confidence — measure, then trust.
 

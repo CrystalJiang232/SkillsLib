@@ -43,6 +43,7 @@
 - [ ] Fixed-array price book instead of `std::map` on the hot path [P1]
 - [ ] Single-slot handler allocator reuse for async handlers [P1]
 - [ ] Bit-packed fixed-size identifiers (no string keys on the hot path) [P1]
+- [ ] Fixed-layout wire structs: explicit bit widths/padding with size static_asserts (bit-field layout is implementation-defined) [P2]
 - [ ] Huge pages for large shared buffers (`SHM_HUGETLB` with fallback) [P2]
 - [ ] Shared cursors use atomics with acquire/release; `volatile` is not a synchronization primitive [P1]
 - [ ] Ring watermark/sequence guard against silent overwrite [P1]
@@ -101,6 +102,7 @@
 - [ ] Length-prefixed framing for replay/parsing [P1]
 - [ ] Length-checked bounded unpack for external/truncated input [P1]
 - [ ] Batched multicast receive (`recvmmsg`) with drop counter (`SO_RXQ_OVFL`) [P2]
+- [ ] Fixed receive buffer reused across async receives; received length passed to the decoder, never a bare pointer [P1]
 - [ ] TCP heartbeat echo + idle reaping [P1]
 - [ ] Shared-memory risk-limit push [P1]
 - [ ] Busy poll configured where driver-supported (`net.core.busy_poll`/`busy_read`, `SO_BUSY_POLL`) [P2]
@@ -123,6 +125,7 @@
 - [ ] Catch-up gating for notification pipelines [P1]
 - [ ] Deferred-formatting log pipeline (thread-local capture, background consumer) [P1]
 - [ ] Edge-triggered threshold alerts [P2]
+- [ ] Signal handlers set a lock-free atomic/flag only; latency-ring dumps and logging happen on a worker thread [P1]
 - [ ] Latency distribution measured via percentiles/histograms (p50/p99/p999), not averages [P1]
 - [ ] Profiling/diagnostic tooling used per `prof-tools.md` (perf/eBPF/VTune/flame graphs; status commands) [P1]
 

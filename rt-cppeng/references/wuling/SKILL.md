@@ -53,8 +53,8 @@ The canonical five-spirit system, shared with `../checklist-hft.md`:
 ## Reference Materials
 
 **Chamber references:**
-- `patterns.md` — C++-internal HFT optimization patterns (pass 1–3 + B-task + 水灵 profiling complete — atomic_queue/CpuPinning + core/msg_parser + option B-derived; Round B 2026-08-24: deferred-format logging, handler allocator, huge-page buffer, fill-block ring, bit-packed IDs; external tooling moved out 2026-08-25)
-- `checklist.md` — high-performance systems quick checklist (pass 1–3 + B-task + 水灵 profiling complete — atomic_queue/CpuPinning + core/msg_parser + option B-derived; Round B rows added 2026-08-24)
+- `patterns.md` — C++-internal HFT optimization patterns (pass 1–3 + B-task + 水灵 profiling complete — atomic_queue/CpuPinning + core/msg_parser + option B-derived; Round B 2026-08-24: deferred-format logging, handler allocator, huge-page buffer, fill-block ring, bit-packed IDs; external tooling moved out 2026-08-25; refinement 2026-08-25: signal-safe dumps, receive-length, wire-struct ABI)
+- `checklist.md` — high-performance systems quick checklist (pass 1–3 + B-task + 水灵 profiling complete — atomic_queue/CpuPinning + core/msg_parser + option B-derived; Round B rows added 2026-08-24; refinement 2026-08-25: signal-safe dumps, receive-length, wire-struct ABI)
 - `flagship.md` — flagship code examples (rounds 1–2 complete — 五灵·锦标 / 五灵·蓬山)
 - `prof-tools.md` — external tools & system status (profiling quick reference, diagnostic commands, kernel-bypass/network tuning, isolation & clock-source status; added 2026-08-25)
 - Kernel and bypass topics: evaluation/tuning guidance lives in `prof-tools.md`; C++-internal 金灵 patterns remain in `patterns.md`.
@@ -121,4 +121,4 @@ Reorder fields by size (largest to smallest): `id` (8), `price` (8), `qty` (4), 
 
 ---
 
-*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B), the B-task (kernel bypass / network tuning), and the 水灵 profiling round folded; flagship rounds 1–2 complete; Round B (2026-08-24) folded scan-derived, web-verified patterns and checklist rows; prof-tools.md (2026-08-25) hosts external tools & system status. Thresholds and venue checklists remain pending — designated growth area.*
+*Pass 1–3 (atomic_queue/CpuPinning, core/msg_parser, option B), the B-task (kernel bypass / network tuning), and the 水灵 profiling round folded; flagship rounds 1–2 complete; Round B (2026-08-24) folded scan-derived, web-verified patterns and checklist rows; prof-tools.md (2026-08-25) hosts external tools & system status; refinement round 2026-08-25 applied web-verified guidance (signal-safe dumps, receive-length, wire-struct ABI). Thresholds and venue checklists remain pending — designated growth area.*
