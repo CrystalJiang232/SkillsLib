@@ -135,11 +135,11 @@ m_pChannel->write( msgBuffer, sizeof( msgBuffer ) );
 **Solution:** Read packed multi-message frames from a memory-mapped ring; walk the batch by element stride and advance a single read cursor.
 
 ```cpp
-while( m_MMapBuffer->showData( data, m_readPos ) ) {
-    const memory::VariableLenData* vld = m_MMapBuffer->unpack_data( data );
+while( m_buffer->showData( data, m_readPos ) ) {
+    const VariableLenData* vld = m_buffer->unpack_data( data );
     for( auto idx = 0; idx < msg->head.itemCount; idx++ ) {
-        AM_QuoteE* quoteE = reinterpret_cast<AM_QuoteE*>( msg->data + idx * msg->head.itemByte );
-        handleQuoteE( quoteE );
+        QuoteSnapshot* quote = reinterpret_cast<QuoteSnapshot*>( msg->data + idx * msg->head.itemByte );
+        handleQuote( quote );
     }
     m_readPos += vld->length;
 }
@@ -615,7 +615,7 @@ for( auto orderRef : orderRefs ) { if( orderRef > 0 && cfg.getIsLimitOrder() ) m
 
 ```cpp
 const char* pBodyBuffer = packageMsg.getBodyBuffer();
-if( pBodyBuffer ) { CESwapInputOrderField stInputOrder = *(CESwapInputOrderField*)pBodyBuffer; ret = m_pTraderApi->ReqOrderInsert( &stInputOrder, sessionId ); }
+if( pBodyBuffer ) { InputOrderField stInputOrder = *(InputOrderField*)pBodyBuffer; ret = m_api->insertOrder( &stInputOrder, sessionId ); }
 return ret;
 ```
 
@@ -782,7 +782,7 @@ else if( ( TimingInfoT::Rdtsc::read() - emptyStart >= m_warmUpTickInterval ) && 
 **Solution:** Each API pair is created with its own cpu id from the config vector.
 
 ```cpp
-std::shared_ptr<X2QuoteApi> api( X2QuoteApi::CreateX2QuoteApi( cfg.getCPUID()[index], cfg.getMemoryKey() ), ... );
+std::shared_ptr<QuoteApi> api( QuoteApi::Create( cfg.getCPUID()[index], cfg.getMemoryKey() ), ... );
 ```
 
 **Implementation notes:**
