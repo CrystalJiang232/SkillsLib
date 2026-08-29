@@ -148,6 +148,7 @@ while( m_buffer->showData( data, m_readPos ) ) {
 **Implementation notes:**
 - One framing check amortizes across many quotes; parsing is reinterpret-cast with no per-message copy.
 - When the ring is empty, the loop yields briefly (microsecond sleep) instead of spinning hot.
+- **Access modes:** a push (subscription) mode runs one dedicated pinned callback thread and invokes the consumer SPI per message; an active-fetch (external-loop) mode lets each consumer thread call `fetch()` directly and advance an independent read position, with no internal thread. Prefer push for a single pinned consumer; prefer fetch when several consumers share one buffer or the caller already owns the thread lifecycle. Cursors stay single-writer/single-reader per buffer; multiple fetch consumers need per-consumer read positions.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
 
 ---
@@ -692,6 +693,22 @@ if( m_setOrderSysID.find( pOrder->OrderSysID ) == m_setOrderSysID.end() ) {
 
 ---
 
+### Sketch: Spin-Wait Ladder (approx-match)
+
+**Match signal:** a loop waiting on a flag, cursor, or queue slot. This is a lookup sketch, not a canonical pattern — tune stage boundaries to the measured wait distribution.
+
+**Ladder:**
+1. **Relaxed-load spin + ISA pause** — for sub-µs expected waits on dedicated/isolated cores. `_mm_pause()` (~10–140 cycles per iteration) cuts power and hyperthread interference; never repeat CAS/exchange in the wait.
+2. **Bounded/exponential backoff** — once the spin budget (e.g., tens of µs) is exceeded, back off with a fixed counter or escalating sleep (libc++ escalates after ~64 µs with an 8 ms cap).
+3. **Brief sleep** — `sleep_for`/nanosleep only when wake cost < sleep benefit: syscall + scheduler wake (~1–3 µs) + timer slack (default 50 µs coalescing; `PR_SET_TIMERSLACK=0` for precise wakeup).
+4. **Park/block** — futex/mutex park for waits beyond a few wake latencies; blocking wake is ~1–3 µs.
+
+**Anti-patterns:** `yield()` in a loop is a more complicated spin, not a sleep; fixed pause without backoff invites CAS storms under sustained contention; sleeping below the wake cost adds latency without saving power.
+
+**Severity:** Consider [P2]; context-dependent — measure stage thresholds on the target kernel/hardware.
+
+---
+
 ## 土灵·麒麟 — Scheduling & Isolation (承载)
 
 ### Pattern: CPU Pinning & Isolation
@@ -892,6 +909,33 @@ if( timeStamp - iter->second->getLastTimeStamp() >= 2 * CheckHeartTimeOut ) {
 **Implementation notes:**
 - Connection health is enforced out-of-band on a steady timer, not on the data path.
 - Severity: Recommended [P1]; externally cross-verified (references in-session).
+
+---
+
+### Pattern: Multicast Receive-Loop Discipline
+
+**Context:** Pinned multicast feed threads with a fixed receive buffer.
+
+**Problem:** Blocking receives can stall on a dead feed, and unbounded re-init loops mask queue overruns or spin a core forever.
+
+**Solution:** Drain non-blocking until `EAGAIN`/`EWOULDBLOCK`; on failure, resubscribe with bounded retries that re-apply socket options and re-join the group.
+
+```cpp
+while( m_running ) {
+    ssize_t n = recv( m_fd, m_buf, sizeof( m_buf ), MSG_DONTWAIT );
+    if( n < 0 ) {
+        if( errno == EAGAIN || errno == EWOULDBLOCK ) { backoff(); continue; }
+        resubscribe( m_fd ); continue; // bounded: re-apply options, re-join group, log drops
+    }
+    handle( m_buf, n );
+}
+```
+
+**Implementation notes:**
+- Drain until `EAGAIN`/`EWOULDBLOCK` so a burst empties the queue in one pass; guard the empty path so a dead feed cannot spin hot forever (bounded backoff or yield).
+- `SO_REUSEADDR` set before `bind()` permits multiple instances on one multicast group; `SO_REUSEPORT` splits flows for load balancing — do not conflate the two.
+- Source-filtered joins (`ip_mreq_source`) restrict delivery to a specific sender; a resubscribe must re-apply every option and re-join the group, and surface the `SO_RXQ_OVFL` drop counter for diagnostics.
+- Severity: Recommended [P2]; externally cross-verified (references in-session).
 
 ---
 
