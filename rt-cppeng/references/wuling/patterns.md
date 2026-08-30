@@ -627,6 +627,18 @@ return ret;
 
 ---
 
+### Sketch: Interface/Plugin Seam (approx-match)
+
+**Match signal:** multiple implementations behind one capability (quote, trade, config, or plugin); vendor or FPGA swap readiness.
+
+**Sketch:** pure interface headers (SPI + data structs) with the implementation plugged at the composition root; once composed, the hot path uses direct calls.
+
+**Caveats:** interface bloat and "anticipating every extension" create artificial separation; keep indirection off the hot path; prefer one implementation per role where the topology permits.
+
+**Severity:** Consider [P2]; context-dependent.
+
+---
+
 ### Pattern: Single-Threaded Event Loop for Bounded Connections
 
 **Context:** A TCP gateway with few downstream connections.
@@ -936,6 +948,18 @@ while( m_running ) {
 - `SO_REUSEADDR` set before `bind()` permits multiple instances on one multicast group; `SO_REUSEPORT` splits flows for load balancing — do not conflate the two.
 - Source-filtered joins (`ip_mreq_source`) restrict delivery to a specific sender; a resubscribe must re-apply every option and re-join the group, and surface the `SO_RXQ_OVFL` drop counter for diagnostics.
 - Severity: Recommended [P2]; externally cross-verified (references in-session).
+
+---
+
+### Sketch: Type-Safe Protocol Constants (approx-match)
+
+**Match signal:** raw numeric FIX tags or wire enums scattered as magic numbers; `char`-array message-type literals.
+
+**Sketch:** name every tag/enum per protocol version (typed tag wrappers or a local constants table with uniqueness `static_assert`s); decode once at the boundary; never compare raw strings on the hot path.
+
+**Anti-patterns:** `char MsgType[]` string literals, repeated magic tag numbers across files, and untyped integer passes.
+
+**Severity:** Consider [P2]; context-dependent — apply where the protocol surface is large (FIX-style) rather than tiny fixed feeds.
 
 ---
 

@@ -340,6 +340,53 @@ bool shm_read( const ShmControl& ctrl, const uint8_t* data, const ShmLayout& lay
 
 ---
 
+### FPGA Feed Decode — Fixed-Point Scaling & Packed Wire Structs
+
+Hardware-accelerated feeds hand over packed frames with fixed-point scaled prices and ingest/decode timestamps; the software layer decodes once at the boundary. Decode-family inventory: classify each feed by protocol type (binary/SBE/L2/FPGA), field set, timestamp granularity, and scaling conventions before writing decode code.
+
+```cpp
+// Requires: <cstdint>, <cstddef>, <cstring>
+
+#pragma pack( push, 1 )
+struct FeedHeader
+{
+    int32_t msgType;
+    int32_t tcpIndex;
+    int32_t msgIndex;
+    int64_t tcpRxTimestamp;   // ingress timestamp at the NIC
+    int64_t decodeTimestamp;  // decode-completion timestamp
+};
+
+struct FeedQuote
+{
+    FeedHeader hdr;
+    int64_t lastPx;           // fixed-point, scaled by kPriceScale
+    int64_t bidPx[10];
+    int64_t bidVlm[10];       // scaled by kVlmScale
+    int64_t askPx[10];
+    int64_t askVlm[10];
+};
+#pragma pack( pop )
+
+static_assert( sizeof( FeedQuote ) % 8 == 0 );
+
+inline constexpr int64_t kPriceScale = 1000000; // 1e6
+inline constexpr int64_t kVlmScale   = 100;     // 1e2
+
+double to_price( int64_t scaled ) noexcept
+{
+    return double( scaled ) / kPriceScale;
+}
+```
+
+**Implementation notes:**
+- Fixed-point int64 arithmetic keeps the hot path floating-point-free; scaling factors are named constants and conversion happens once at the boundary.
+- Ingest/decode timestamps carried in the header preserve hardware timing for latency attribution (水灵).
+- Mark legacy/replaced fields `[[deprecated]]` rather than deleting wire layout; `static_assert` sizes and packing.
+- Severity: Recommended [P1]; code sketch — verify against the target feed/API version.
+
+---
+
 ## 水灵·玄武 — Observability & Profiling (润下)
 
 ### Latency Measurement Harness

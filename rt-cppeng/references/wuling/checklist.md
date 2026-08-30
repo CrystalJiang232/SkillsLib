@@ -100,10 +100,12 @@
 - [ ] Kernel bypass evaluated (DPDK/RDMA/io_uring) [P1]
 - [ ] Zero-copy data paths where applicable [P1]
 - [ ] Shared-memory ring IPC channels (zero-copy, same-host) [P1]
+- [ ] Shared-memory producer-consumer model: one writer/one reader per ring, memory-key addressing, push vs active-fetch chosen deliberately, version/format guard in the shared header (fail on mismatch), no parallel ring implementations [P1]
 - [ ] Length-prefixed framing for replay/parsing [P1]
 - [ ] Length-checked bounded unpack for external/truncated input [P1]
 - [ ] Batched multicast receive (`recvmmsg`) with drop counter (`SO_RXQ_OVFL`) [P2]
 - [ ] Multicast receive-loop discipline: drain until `EAGAIN`/`EWOULDBLOCK` with a starvation guard; `SO_REUSEADDR` for multi-instance joins, `SO_REUSEPORT` for load-split; bounded reconnect re-applies options and re-joins the group [P2]
+- [ ] No dormant/disabled vendor paths: pattern sources verified live (`#if 0` bodies and disabled API stubs excluded); prefer deletion via VCS history over commented-out code [P2]
 - [ ] Fixed receive buffer reused across async receives; received length passed to the decoder, never a bare pointer [P1]
 - [ ] TCP heartbeat echo + idle reaping [P1]
 - [ ] Shared-memory risk-limit push [P1]
@@ -130,6 +132,8 @@
 - [ ] Signal handlers set a lock-free atomic/flag only; latency-ring dumps and logging happen on a worker thread [P1]
 - [ ] Latency distribution measured via percentiles/histograms (p50/p99/p999), not averages [P1]
 - [ ] Profiling/diagnostic tooling used per `prof-tools.md` (perf/eBPF/VTune/flame graphs; status commands) [P1]
+- [ ] Process supervision: watchdog/health check with bounded restart and alert seams (log watcher, process check, IM notifier) [P2]
+- [ ] Per-module test matrix (venue/broker smoke → regression tiers) runnable and current [P2]
 
 ---
 
