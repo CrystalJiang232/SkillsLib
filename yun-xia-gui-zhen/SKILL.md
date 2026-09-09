@@ -301,11 +301,14 @@ Apply these patterns to enhance prompt quality and response reliability:
 | **Chain-of-Reasoning Trigger** |   Force step-by-step reasoning before conclusion    |     Complex decisions, trade-off analysis, debugging      |
 | **Reflection / Self-Correction** |   Generate → critique → revise to catch errors     | Outputs with checkable criteria; before marking complete  |
 |        **RAG Pattern**         |   Ground generation in retrieved external context (grep/glob-first; no index default)   | Technical recommendations, factual claims, best practices |
+|  **Writing for Agents**        |  Author compact AI-facing docs (AGENTS.md/SKILL.md): specific, verifiable, progressive disclosure |  Creating or editing agent-facing instruction files |
 |     **Verification Hooks**     |   Embed checkpoints to self-verify output quality   | Before marking any task complete; in multi-step workflows |
 
-**Details**: Read [references/prompt-patterns.md](references/prompt-patterns.md) for RTCF, Explicit Constraint, Chain-of-Reasoning Trigger, and Reflection / Self-Correction.
+**Details**: Read [references/prompt-patterns.md](references/prompt-patterns.md) for RTCF, Explicit Constraint, Shared Language / Glossary Alignment, Chain-of-Reasoning Trigger, and Reflection / Self-Correction.
 
 **RAG Pattern**: Read [references/rag-pattern.md](references/rag-pattern.md) for retrieval-augmented generation workflows (**tool-first**: `glob`/`rg`/`grep`/`read` before any semantic index).
+
+**Writing for Agents**: Read [references/writing-for-agents.md](references/writing-for-agents.md) when creating or editing AGENTS.md / CLAUDE.md / SKILL.md-style always-on instruction files.
 
 ## Bootstrap Mode (opt-in, inactive by default)
 

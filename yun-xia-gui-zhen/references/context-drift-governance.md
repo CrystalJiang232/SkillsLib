@@ -8,6 +8,7 @@
 - The CTAGV Working Loop
 - Pre-Work Setup
 - Phase-by-Phase Execution Rules
+- Per-File Work Status Checkpoint
 - Mode B Extension
 - Verification Hooks Pattern
 - Verification Execution Log
@@ -199,6 +200,7 @@ After the gate passes, inject only the minimal high-signal context needed for th
 - Keep durable governance state in `.agent/state/` (see File Hygiene); keep only short-lived intermediates and code-work byproducts in the OS-temp session subdirectory, else record them in the Cleanup Registry
 - Do not pollute the workspace with temporary files
 - Show generation actions explicitly
+- Track per-file work status at checkpoint boundaries (Per-File Work Status Checkpoint below); this complements, never replaces, the TODO status field and the `next_round_proposal` block
 
 ### Phase V — Verify
 
@@ -208,6 +210,34 @@ After the gate passes, inject only the minimal high-signal context needed for th
 - Apply **Chain-of-Reasoning Trigger** for complex verification decisions
 - Apply the retry and terminal-failure transitions owned by [pre-edit-safety.md](pre-edit-safety.md)
 - Do not mark task complete unless all hooks pass
+- Checkpoint the per-file work status when Verify ends (see below) so a compacted or interrupted session resumes from recorded truth, not reconstruction
+
+## Per-File Work Status Checkpoint
+
+For multi-file tasks, maintain a lightweight per-file ledger in the durable state area so each file's work status survives compaction, interrupts, and handoffs. Scale the ledger to the task: skip it for single-file or trivial edits; use the full checkpoint discipline for multi-file or long-horizon work.
+
+**Checkpoint boundaries** (update the ledger at these points, not on every keystroke):
+
+- After each file write reaches a meaningful milestone (file edited, file verified, or file blocked)
+- At the end of Phase G or Phase V
+- On any interrupt, halt, stop, wait, or session-end, before reporting or transferring work
+
+**Ledger shape** (append to the task's state file, e.g. `.agent/state/todo.md` or a per-task work-status block):
+
+```markdown
+## Per-File Work Status - [task name]
+
+| File | Action | Status | Blocked by / Notes |
+|------|--------|--------|--------------------|
+| [path] | [edit / verify / revert] | [pending, in_progress, done, or blocked] | [blocker or verification result] |
+```
+
+**Rules**
+
+- At a checkpoint, record `Action`, `Status`, and one-line `Blocked by / Notes` per touched file; do not duplicate full diff content that belongs in verification hooks or the CAS register
+- On resume after compaction or interrupt, read the ledger first and treat it as the state of record; re-verify only boundaries claimed `done` when the task's verify hook demands it
+- When a round halts with deferred points, the ledger complements the `next_round_proposal` block in the constraints file: the proposal carries open decisions, the ledger carries per-file execution state; keep them consistent and do not restate one inside the other
+- For chunked or subagent edits, the ledger is the Mode-A analogue of the Mode B Artifact State Log (below): same staleness guard, re-hash and re-read the target file before any further write when the ledger is the only continuity record
 
 ## Mode B Extension — Swarm State & Bounded Verification
 
