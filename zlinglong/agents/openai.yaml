@@ -1,0 +1,4 @@
+interface:
+  display_name: "醉玲珑 zlinglong"
+  short_description: "人教版2019 高中化学知识与计算层（骨架，未核验）"
+  default_prompt: "用 $zlinglong 回答这道高中化学题，并按契约附出处附录。"
