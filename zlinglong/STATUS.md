@@ -1,7 +1,8 @@
 # zlinglong 状态与交接（STATUS）
 
-> 本文件是**给其他 agent 会话看的可见状态页**：`.agent/state/` 位于仓库忽略目录，其他会话可能看不到，因此本文件承载该状态的可见子集。
-> 最近更新：2026-09-16 ｜ 对应提交：`7638cdf zll-0`（骨架已入库）｜ 工作树：3 条未提交路径，见第 1 节
+> 本文件是**给其他 agent 会话看的可见状态页**：`.agent/` 位于仓库忽略目录，其他会话可能看不到，因此本文件承载该状态的可见子集。
+> 最近更新：2026-09-16（第三轮：状态分仓）｜ 对应提交：`d0840e6 zll-0.5`｜ 工作树：本轮改动未提交（`.gitignore`、`README.md`、本文件）
+> 状态位置（2026-09-16 起）：zlinglong 的全部状态文件在 **`zlinglong/.agent/state/`**；父级 `.agent/state/` 仅存库级状态（跨技能决策、仓库结构、打包与安装）。
 
 ## 1. 当前阶段
 
@@ -11,7 +12,7 @@
 - 唯一阻塞：B-1 教材容器加密（见第 3 节）。
 - 数据进展（2026-09-15/16）：`data/elements.jsonl` 已写入 47 条（周期 1–4 全量 + Rb/Sr/Ag/Sn/I/Ba/Au/Hg/Pb/Cs/Pt），sha256 `ab48093fed145a19995e2b6234daa7f6c0010b3270c6612c694832b31bc823f2`；教材取值现为**唯一真值来源**，PDF 复核语义已按用户指示移除。
 - 脚本进展：**未改动**；`chembox` 与 `vendor/chemlib` 仍按 `resources/PTE.csv` 的 IUPAC 值计算，教材值尚未进入计算路径（待决 C-1）。
-- 未提交路径：`M zlinglong/data/elements.jsonl`、`M zlinglong/textbook/MANIFEST.md`、`?? zlinglong/STATUS.md`。
+- git 状态（2026-09-16 第二轮复核）：HEAD `d0840e6 zll-0.5`，工作树干净；本节早前记录的「3 条未提交路径」已由该提交收编，不再是待决项。
 
 ## 2. 现在即可执行（不依赖教材 PDF）
 
@@ -54,9 +55,11 @@
 ## 6. 恢复指引（新会话按序阅读）
 
 1. 本文件（可见状态）。
-2. `.agent/state/pending-clarifications.md` 的**第十二轮（2026-09-16）**与第十一轮：待决 C-1、C-2b 与已丢弃的 C-3~C-6 记录。
-3. `.agent/state/constraints.md`（本轮硬约束）、`todo.md`（任务）、`verification.md`（V104–V109 证据）、`protection-status.md`（写入与备份登记）。
+2. `zlinglong/.agent/state/pending-clarifications.md` 的**第十二轮（2026-09-16）**与第十一轮：待决 C-1、C-2b 与已丢弃的 C-3~C-6 记录。
+3. `zlinglong/.agent/state/constraints.md`（硬约束）、`todo.md`（任务）、`verification.md`（V18–V116 证据；库级的 V117 起在父级 `.agent/state/verification.md`）、`protection-status.md`（写入与备份登记）。
 
 待决事项（恢复后第一件事）：C-1（教材值进入计算路径：运行时覆盖 / 烘焙进 CSV / 两者）、C-2b（越表元素的拒绝粒度）；另有 5 处旧口径 sidenote 的去留待定（`scripts/chembox.py` 的 IUPAC 提示、`references/deferrals.md` D-2 影响行、`STATUS.md` 的 A-2/A-3 与页码偏移条目、`textbook/MANIFEST.md` 的快照约定、`data/elements.jsonl` 的「图中值…」与 oracle 列）。
 
-**证据时效提示**：`/tmp` 已于 2026-09-16 被清空，早前存于 `/tmp` 的会话中间产物（`zll_elements_preview.jsonl`、`zll_elements_before_removal.jsonl`、渲染与解包目录）**已不存在**；上一轮会话登记的 `/tmp/yunxia-backups/*` 同样已消失。移除前的元素表内容可由当前文件**逐条重新追加**被移除的固定子句「；图中印刷值由照片转写，待 PDF 复核」重建，该子句原文记录在 `.agent/state/verification.md` 的本轮条目中。
+库级待决（不属于本技能）：技能仓库结构迁移提案 S-1..S-7（单仓 / 每技能状态目录 / 混合 / 全部子模块）；S-1（先做状态分仓）已执行，S-4/S-5/S-6 采用建议默认值，S-2/S-3/S-7 未决 —— 记录在父级 `.agent/state/pending-clarifications.md`。
+
+**证据时效提示**：`/tmp` 已于 2026-09-16 被清空，早前存于 `/tmp` 的会话中间产物（`zll_elements_preview.jsonl`、`zll_elements_before_removal.jsonl`、渲染与解包目录）**已不存在**；上一轮会话登记的 `/tmp/yunxia-backups/*` 同样已消失。移除前的元素表内容可由当前文件**逐条重新追加**被移除的固定子句「；图中印刷值由照片转写，待 PDF 复核」重建，该子句原文记录在 `zlinglong/.agent/state/verification.md` 的 2026-09-16 条目中。
