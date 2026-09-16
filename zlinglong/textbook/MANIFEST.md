@@ -21,3 +21,20 @@
 
 - R11：五册 PDF 合计约 76 MB，会使 `bin/zlinglong.skill` 体积显著增大（`package_skill.py` 打包整个目录）。
 - R3：教材 PDF 的版权与分发范围需在打包前确认。
+
+## 附录快照约定（解包后执行，用于数据导入的证据留存）
+
+- 目录：`zlinglong/textbook/snapshots/`。
+- 命名：`<册次>-pdf<PDF页序>-p<印刷页码>-<主题>.png`，例如 `必修第一册-pdf101-p85-相对原子质量表.png`；印刷页码无法辨认时写 `pNA`。
+- 分辨率：正文表格用 `-r200`，密集小字表格用 `-r300`。
+- 命令模板：
+
+```bash
+gs -q -dNOPAUSE -dBATCH -sDEVICE=png16m -r200 \
+   -dFirstPage=<PDF页序> -dLastPage=<PDF页序> \
+   -sOutputFile=zlinglong/textbook/snapshots/<册次>-pdf<PDF页序>-p<印刷页码>-<主题>.png \
+   document.pdf
+```
+
+- 文本复核（可选，有文本层时）：`gs -q -dNOPAUSE -dBATCH -sDEVICE=txtwrite -dFirstPage=<p> -dLastPage=<p> -sOutputFile=- document.pdf`
+- 用途：快照是「写什么」的证据载体；数据条目写入时应能在快照与 `source` 页码之间建立对应关系。
